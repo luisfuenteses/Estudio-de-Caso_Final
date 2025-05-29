@@ -1,0 +1,2781 @@
+---
+title: "Visualización y análisis multivariado de comunidades ícticas en un sistema fluvial: ejercicio exploratorio basado en los datos de Ruiz-Campos et al. (2021)"
+subtitle: "Estudio de caso para la aplicación de estadíastica multivariada"
+date: last-modified #now #today
+description: Se realizarán algunos ejercicios con el objetivo de fortalecer destrezas en manejo y análisis de bases de datos.
+author: 
+  name: Fuentes-Sáenz, Luis - Uribe-Lache, Julian - Sánchez-Charris, Vanessa
+  url: https://www.unimagdalena.edu.co/
+  afiliation: 
+  afiliation-url: 
+title-block-banner: "#2ca25f"
+format:
+  html:
+    toc: true    # Tabla de contenido
+    toc-depth: 6 
+    toc-title: Menú flotante
+    code-tools: false   # Opción para descargar los códigos
+    code-fold: false   # Visualización de los códigos en el reporte
+    css: ["styles2.css"]    # Colores del texto.
+lang: ES-es
+---
+
+------------------------------------------------------------------------
+
+![](images/foto%20artículo.png){fig-align="center"}
+
+DOI: <https://doi.org/10.1007/s10641-021-01158-9>
+
+------------------------------------------------------------------------
+
+## Contexto de la base de datos
+
+Las bases de datos están compuestas por dos archivos de Excel que contienen datos biológicos y ambientales. En la base de datos biológicos, se encuentran columnas de 90 especies y en las filas las localidades, estas están identificadas con las iniciales M (montaña), P (llanura) y RM (desembocadura de río), indicando la altitud de cada sitio, y están numeradas del 1 al 43. La base de datos ambientales esta constituida por 23 variables ambientales de las cuales 7 variables son cuantitativas y 16 cualitativas. Además, se midieron 9 parámetros de calidad de agua en cada sitio.
+
+------------------------------------------------------------------------
+
+## Introducción
+
+La comprensión de los patrones de diversidad y distribución de las comunidades acuáticas es fundamental al abordar los sistemas fluviales, porque son determinantes para la ecología acuática contemporánea. Estos patrones han reflejado la interacción entre factores bióticos y abióticos, así como han servido como indicadores de la salud ecosistémica de integridad hidrológica (Ospina et al., 2023). Los peces son uno de los grupos más diversos y ecológicamente significativos de la fauna que habita el ecosistema. La variación longitudinal crea, de hecho, gradientes ambientales que modelan la estructura de las comunidades de peces, tanto en los sistemas neotropicales como en los templados (Ospina et al., 2023; Torruco et al., 2017). Sin embargo, la incertidumbre de los controladores de estos sistemas con relación a la dimensionalidad de las variables ambientales y biológicas sólo puede abordarse a partir de un análisis capaz de juntar disímiles informaciones en patrones ecológicos significativos. Es por esta razón que se emplea la estadística multivariada.
+
+Como buena parte de la ciencia moderna, la ecología ha evolucionado de enfoques más sencillos hacia el uso de modelos estadísticos multivariantes. En este caso, la multi-variedad proporciona a los ecólogos la posibilidad de responder a preguntas complejas sobre la estratificación de la comunidad (De Catalunya et al., 2018). La evolución posterior, en el contexto del software estadístico en general y del lenguaje R en particular, ha permitido que un número cada vez mayor de ecólogos formule y analice hipótesis complejas y multivariantes dentro de flujos de trabajo reproducibles y personalizados (González, 2017).
+
+En el presente ejercicio, se empleará una base de datos derivada del estudio de Ruiz-Campos et al. (2021), donde se analiza la diversidad y distribución longitudinal de las comunidades de peces en la cuenca del río Soto La Marina, al noreste de México. A través del análisis de datos ambientales y biológicos recolectados en 43 sitios, los autores identifican tres ensamblajes principales asociados a zonas fisiográficas (montaña, planicie y desembocadura), y exploran cómo variables como salinidad, conductividad, turbidez y estructura del hábitat explican la composición de la ictiofauna a lo largo del gradiente ambiental. Se realizará un proceso básico de preparación de datos, seguido de visualizaciones exploratorias, a su vez como parte del enfoque multivariado, se implementarán análisis de Componentes Principales (PCA) para explorar gradientes ambientales y Escalamiento Multidimensional No Métrico (NMDS) para evaluar la estructuración de las comunidades ícticas en función de la composición de especies. Todos los análisis serán desarrollados mediante el software estadístico RStudio. Con ello, se busca identificar tendencias espaciales, relaciones entre variables y patrones ecológicos relevantes en la diversidad de peces a lo largo del gradiente longitudinal del sistema fluvial.
+
+------------------------------------------------------------------------
+
+## Objetivos
+
+### Objetivo General:
+
+Examinar los patrones de distribución de las comunidades de peces en un sistema fluvial a partir de sus relaciones con gradientes ambientales.
+
+### Objetivos Específicos:
+
+1.  Estimar la asociación entre variables ambientales y la composición de especies de peces.
+2.  Detectar patrones de agrupamiento entre sitios de muestreo en función de similitudes en las comunidades ícticas.
+
+------------------------------------------------------------------------
+
+## **Pregunta de análisis:**
+
+¿Qué variables ambientales están más relacionadas con los cambios en las comunidades de peces a lo largo del sistema fluvial, y cómo estas relaciones pueden explicar los patrones de distribución observados?
+
+------------------------------------------------------------------------
+
+## Diagrama de flujo
+
+![](images/Diagrama%20de%20flujo.png){fig-align="center"}
+
+------------------------------------------------------------------------
+
+## Librerías requeridas
+
+```{r, warning=FALSE, message=FALSE}
+library(readxl)
+library(dplyr)
+library(kableExtra)
+library(tidyverse)
+library(lattice)
+library(ellipse)
+library(corrplot)
+require(SciViews)
+library(psych)       
+library(GGally) 
+require(gclus)
+require(SciViews)
+require(ade4)
+require(vegan)
+require(stats) 
+library(ggplot2)
+library(pheatmap)
+library("gplots")
+library(gridExtra)
+library(factoextra)
+library(reshape)
+library(ggrepel)
+library(reshape2)
+library(ggforce)
+library(car)
+library(MASS)
+library(candisc)
+library(mvnormtest)
+source("funciones.r")
+library(caret)
+library(car)
+```
+
+------------------------------------------------------------------------
+
+## Base de datos
+
+```{r, warning=FALSE, message=FALSE}
+# Leer la base de datos
+biol <- read_excel("peces marinos méxico_biológicos.xlsx", sheet = "Hoja1", col_names = TRUE)
+
+amb <- read_excel("peces marinos méxico_ambientales.xlsx", sheet = "Hoja1", col_names = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Convertir de formato largo a ancho los datos biológicos
+largo_biol <- biol %>%
+  pivot_longer(cols = 2:90,  # Seleccionamos las columnas de especies
+               names_to = "Especie",  # Nueva columna con los nombres de las especies
+               values_to = "Abundancia")  # Nueva columna con los valores de abundancia
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Convertir de formato largo a ancho los datos ambientales
+largo_amb <- amb %>%
+  pivot_longer(cols = 2:38,  # Seleccionamos las columnas de especies
+               names_to = "Variables",  # Nueva columna con los nombres de las especies
+               values_to = "Valores")
+```
+
+------------------------------------------------------------------------
+
+## Abundancia por sitios
+
+```{r message=FALSE, warning=FALSE}
+largo_biol <- largo_biol %>%
+  group_by(Sitios) %>%
+  mutate(Abundancia_Total_Sitio = sum(Abundancia, na.rm = TRUE)) %>%
+  ungroup()
+
+# Resumen de la base de datos original (seis primeras filas)
+head(largo_biol) %>% 
+   kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+```{r, warning=FALSE, message=FALSE}
+# Generar una nueva columna con valores abreviados en biol
+largo_biol <-
+  largo_biol %>% 
+  mutate(Abrev = abbreviate(Especie, minlength = 4))
+```
+
+```{r message=FALSE, warning=FALSE}
+# Unir bases de datos
+biol_amb <-
+  amb %>% 
+  left_join(largo_biol, by= "Sitios")
+```
+
+------------------------------------------------------------------------
+
+## Taxones más abundantes
+
+La @tbl-tbl1 muestra las 30 especies más abundantes en los diferentes ríos muestreados. Se observa que la especie *Poecilia mexicana* es la más abundante con un total de 5.573 registros, seguida de la especie *Astyanax mexicanus* con 4.003 registros, indicando que son especies muy comunes en los sitios de estudio.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: tbl-tbl1
+#| tbl-cap: Abundancia de Especies de Peces (30 más abundantes) en la cuenca del río Soto La Marina, México (seis primeras filas). 
+
+# Seleccionar los 15 taxones más abundantes
+  Abundantes <- largo_biol %>%
+  group_by(Especie, Abrev) %>%  # Agrupar por especie y abreviatura
+  summarise(Abundancia_Total = 
+              sum(Abundancia, na.rm = TRUE), 
+            .groups = "drop") %>%  # Eliminar el agrupamiento
+  arrange(desc(Abundancia_Total)) %>%  # Ordenar de mayor a menor
+  slice_head(n = 30)  # Seleccionar los 15 taxones más abundantes
+
+# Visualizar tabla
+head (Abundantes) %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+------------------------------------------------------------------------
+
+## Resumen estadístico de la base de datos biológica
+
+La @tbl-tbl2 muestra un resumen estadístico de los datos biológicos en el sitio de estudio. Se puede observar que el sitio **35M** destaca con la mayor abundancia media (**\~24**) y el valor máximo más alto (**1543**), por el contrario, el sitio **1M** tiene la menor abundancia media (**0.14**) y el máximo más bajo (**10**). La desviación estándar (SD) refleja la variabilidad en la abundancia dentro de cada sitio. Sitios como **35M** y **26M** muestran una alta variabilidad (SD de **167.5** y **150.5**, respectivamente), Por otro lado, sitios como **1M** y **9P** tienen una variabilidad baja (SD de **1.10** y **1.77**).
+
+```{r, warning=FALSE, message=FALSE}
+#| label: tbl-tbl2
+#| tbl-cap: Resumen estadístico de la abundancia de peces en la cuenca del río Soto La Marina, México (seis primeras filas). 
+
+# Resumen estadístico de la base biológica
+resumen_biologico <- largo_biol %>%
+  group_by(Sitios) %>%  # Agrupar por sitio
+  summarise(
+    Abundancia_Media = mean(Abundancia, na.rm = TRUE),
+    Abundancia_Min = min(Abundancia, na.rm = TRUE),
+    Abundancia_Max = max(Abundancia, na.rm = TRUE),
+    Abundancia_SD = sd(Abundancia, na.rm = TRUE),
+    .groups = "drop"  # Evita mensajes sobre agrupación
+  )
+head(resumen_biologico) %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+------------------------------------------------------------------------
+
+## Resumen estadístico de la base de datos ambiental
+
+En la @tbl-tbl3 muestra un resumen estadístico de los datos ambientales en el sitio de estudio. Se observa que el pH muestra una media de **7.51**, con valores que oscilan entre **6.5** y **8.3**, lo que indica un ambiente predominantemente neutro a ligeramente alcalino. La temperatura del agua tiene una media de **27.36°C**. La conductividad, con una media de **641.39 µS/cm** y un máximo de **1655 µS/cm**, refleja diferencias en la concentración de iones disueltos, posiblemente relacionadas con la presencia de sales u otros compuestos. El oxígeno disuelto, con una media de **6.66 mg/L**, muestra una amplia variabilidad (desde **1.2 mg/L** hasta **24.9 mg/L**), lo que podría indicar diferencias en la calidad del agua y la actividad fotosintética. Los nutrientes como nitritos (NO₂), nitratos (NO₃) y amonio (NH₄⁺) presentan concentraciones bajas en general, con medias de **0.02 mg/L**, **0.5 mg/L** y **1.47 mg/L**, respectivamente, lo que sugiere una limitada contaminación por compuestos nitrogenados. Los fosfatos, con una media de **0.21 mg/L**, también indican bajos niveles de contaminación por fósforo. En cuanto a la varianza, la conductividad presentó los valores más altos (**140964.03 µS/cm**).
+
+```{r, warning=FALSE, message=FALSE}
+#| label: tbl-tbl3
+#| tbl-cap: Resumen estadístico de las variables ambientales en la cuenca del río Soto La Marina, México.
+
+# Selecciona solo las variables ambientales de interés
+variables_seleccionadas <- amb %>%
+   dplyr::select(`pH`, `Water temperature`, `Conductivity`, 
+         `Salinity`, `Transparency`, `Oxygen`, 
+         `Carbon Dioxide`, `Alkalinity`, `NO2`, 
+         `NO3`, `Ammonium`, `Hardness`, 
+         `Phosphates`, `TDS`)
+
+# Resumen estadístico de las variables seleccionadas
+resumen_ambiental <- variables_seleccionadas %>%
+  summarise(across(everything(), 
+                   list(Media = ~ round (mean(., na.rm = TRUE), 2),
+                        Minimo = ~ round (min(., na.rm = TRUE), 2),
+                        Maximo = ~ round (max(., na.rm = TRUE), 2),
+                        DE = ~ round (sd(., na.rm = TRUE), 2),
+                        Varianza = ~ round (var(., na.rm = TRUE), 2),
+                        Rango = ~ round (max(., na.rm = TRUE) - min(., na.rm = TRUE), 2),
+                        Q1 = ~ round (quantile(., probs = 0.25, na.rm = TRUE), 2),
+                        Q2 = ~ round (quantile(., probs = 0.50, na.rm = TRUE), 2),
+                        Q3 = ~ round (quantile(., probs = 0.75, na.rm = TRUE), 2)))) %>%
+  pivot_longer(cols = everything(), 
+               names_to = c("Variable", "Estadistico"), 
+               names_sep = "_") %>%
+  pivot_wider(names_from = "Estadistico", values_from = "value")
+
+resumen_ambiental %>% 
+  kbl() %>% 
+  kable_classic()
+```
+
+```{r, warning=FALSE, message=FALSE}
+biol_abrev <- largo_biol %>%
+   dplyr::select(Sitios, Abrev, Abundancia) %>%
+  pivot_wider(names_from = Abrev, values_from = Abundancia)  #convertir a formato ancho
+```
+
+```{r}
+biol_log <- largo_biol %>%
+   dplyr::select(Sitios, Abrev, Abundancia) %>%
+  pivot_wider(names_from = Abrev, values_from = Abundancia)
+
+columnas_numericas <- names(biol_log)[2:50]
+
+# Iterar sobre los nombres de las columnas
+for (columna in columnas_numericas) {
+  # Manejar los NAs: reemplazarlos con 0 antes de la suma condicional
+  biol_log[[columna]][is.na(biol_log[[columna]])] <- 0
+
+  # Identificar los valores cero y sumar 1 solo a ellos
+  biol_log[[columna]][biol_log[[columna]] == 0] <- biol_log[[columna]][biol_log[[columna]] == 0] + 1
+
+  # Aplicar el logaritmo común (log10) a la columna
+  biol_log[[columna]] <- log10(biol_log[[columna]])
+}
+```
+
+------------------------------------------------------------------------
+
+## Exploración gráfica en Excel
+
+La **`Figura 1`** muestra los valores promedio de conductividad, dureza y sólidos disueltos totales (TDS) por Río, con sus respectivas desviaciones estándar. Los puntos rojos representan la abundancia total de peces por Río. Se observa que, en algunos sitios como San Carlos y Santa Ana, los altos valores de conductividad podrían estar asociados con una mayor abundancia de peces, pero esta relación no se mantiene igual en todos los sitios, lo que indica que otros factores ambientales o ecológicos también influyen en la distribución y abundancia de peces.
+
+![](images/clipboard-2346192771.png)
+
+**`Figura 1.`** Relación entre variables ambientales del agua y la abundancia total de peces por Río.
+
+------------------------------------------------------------------------
+
+La **`figura 2`** muestra la abundancia de las seis principales especies de peces por Río. Se observa que *Pclm* y *Astm* presentan las mayores abundancias en la mayoría de los Ríos, destacándose especialmente en San Marcos y San Felipe. El taxón *Gmbr* muestra una abundancia particularmente alta en Arroyo Grande, lo que indica una posible especialización o adaptación local, ya que su presencia en los demás sitios es baja o nula. Estas diferencias en abundancia entre taxones y sitios podrían reflejar gradientes ambientales.
+
+![](images/clipboard-3907635489.png)
+
+**`Figura 2.`** Distribución de abundancia de las 6 principales especies de peces por Río.
+
+------------------------------------------------------------------------
+
+## Exploración gráfica
+
+### Figura de elipises con las especies más abundantes
+
+La @fig-fig1 representa las relaciones entre las especies de peces evaluadas. En su mayoría, se observan correlaciones positivas aunque no altamente significativas. Por ejemplo, la abundancia total tiene correlación positiva con las especies *Astyanax mexicanus* (**76%**), *Herichthys cyanoguttatus* (**71%**) y *Poecilia mexicana* (**68%**). Por otro lado, la mayoría de las correlaciones negativas fueron leves, lo que indica que la abundancia de una especie no parece verse fuertemente afectada por la presencia de otra.
+
+```{r}
+d_elipses <- read_xlsx("datos_PCA.xlsx", sheet = "Hoja2")
+
+# Transformación logarítmica de las especies más abundantes
+biol2 <- log(d_elipses[, 40:52] + 1)
+
+# Matriz de correelación con las variables transformadas
+M <- cor(biol2, use = "complete.obs")
+```
+
+```{r, message=FALSE, warning=FALSE}
+#| label: fig-fig1
+#| fig-cap: Relaciones lineales comparando las abundancias de peces entre sí en los diferentes ríos muestreados. Las elipses azules representas relaciones positivas y las rojas representan relaciones negativas.
+
+corrplot(M,  method = "circle",            # Correlaciones con circulos
+         type = "lower", insig="blank",    # Forma del panel
+         order = "AOE", diag = FALSE,      # Ordenar por nivel de correlación
+         addCoef.col ="black",             # Color de los coeficientes
+         number.cex = 0.6,                 # Tamaño del texto
+         col = COL2("RdYlBu", 200))
+```
+
+------------------------------------------------------------------------
+
+### Figura de elipses de los datos ambientales fisicoquímicos
+
+La @fig-fig2 representa las relaciones entre las variables ambientales evaluadas. Se observa que la relación más fuerte se observó entre las variables Profundidad media de la zona muestreada (**Adotsa**) y Profundidad máxima (**Mxmd**) (**96%**), Salinidad (**Slnt**) y Anchura de la superficie del agua (**Wotws**) (**84%**), y Conductividad (**Cndc**) y Sólidos disueltos totales (**TDS**) (**77%**). Lo que nos indica que estás variables estarán correlacionadas al estar en valores altos o bajos en los sitios. Por otro lado, no se observan relaciones negativas fuertes entre las varibales ambientales.
+
+```{r, warning=FALSE, message=FALSE, fig.height=5}
+#| label: fig-fig2
+#| fig-cap: Relaciones lineales comparando datos ambientales en los diferentes ríos muestreados. Las elipses azules representas relaciones positivas y las rojas representan relaciones negativas.
+
+M2 <- cor(d_elipses[, c(4:8, 25:29, 33, 36, 39)]) # Matriz de correlación
+# Elipses
+corrplot(M2,  method = "circle",            # Correlaciones con circulos
+         type = "lower", insig="blank",    # Forma del panel
+         order = "AOE", diag = FALSE,      # Ordenar por nivel de correlación
+         addCoef.col ="black",             # Color de los coeficientes
+         number.cex = 0.6,                 # Tamaño del texto
+         col = COL2("RdYlBu", 200))
+```
+
+------------------------------------------------------------------------
+
+### Figura de elipses de los datos ambientales y biológicos con las abundancias convertidas a logaritmo (`log10`)
+
+La @fig-fig3 muestra las relaciones entre las especies de peces y las variables ambientales evaluadas. Se observaron relaciones fuertemente positivas entre el pH y la especie *Gambusia* sp. (**77%**), entre la Alcalinidad (**Alkl**) y *Aplodinotus grunniens* (**77%**), y entre Amonio (**Ammn**) y *Herichthys cyanoguttatus* (**73%**). Por otro lado, para la especie *Gambusia regani* se observaron relaciones negativas con las variables Adotsa, Mxmd, Wotws, Typs (Tipo de corriente) y Slnt. La abundanica total tuvo una relación positiva con las variables Ammn (**54%**) y TDS (**53%**) y una realción negativa con Alt2 (**Altitud**).
+
+```{r}
+#| label: fig-fig3
+#| fig-cap: Relaciones lineales comparando datos ambientales vs biologicos en los diferentes ríos muestreados. Las elipses azules representas relaciones positivas y las rojas representan relaciones negativas.
+
+Mamb_biol <- cor(M2, M, "pairwise.complete.obs")
+
+# matriz de elipses
+corrplot(Mamb_biol, method = "circle",
+         type = "full", # Mostrar toda la matriz
+         order = "original",
+         addCoef.col = "black", number.cex = 0.6,
+         col = COL2("RdYlBu", 200))
+```
+
+------------------------------------------------------------------------
+
+### Nueva columna con los ríos a los que pertenece cada sitio muestreado
+
+```{r}
+biol_amb$Sitios = as.factor(biol_amb$Sitios)
+biol_amb <- biol_amb %>% 
+  mutate(Rios = case_when(
+    Sitios %in% c("1M", "2M", "3P") ~ "Arroyo Grande",
+    Sitios %in% c("4M", "5M", "6P", "7P", "8M") ~ "Corona",
+    Sitios %in% c("9P", "10P") ~ "Palmas",
+    Sitios %in% c("11M", "12M", "13M", "14M", "15P", "16P") ~ "Pilón",
+    Sitios %in% c("17M", "18M", "19P", "20M", "21P", "22P", "23P") ~ "Purificación",
+    Sitios %in% c("25M", "26M", "27P") ~ "San Carlos",
+    Sitios %in% c("28M", "29M", "30M", "31M", "32M") ~ "San Felipe",
+    Sitios %in% c("33M", "34M", "35M") ~ "San Marcos",
+    Sitios %in% c("36M", "37P", "38M") ~ "Santa Ana",
+    Sitios %in% c("39P", "40P", "41P", "42RM", "43RM") ~ "Soto la Marina",
+    TRUE ~ "Otro" 
+  ))
+```
+
+------------------------------------------------------------------------
+
+### Figuras de cajas y bigotes
+
+La @fig-fig4 muestra la distribución de las abundancias de peces en los diferentes ríos muestreados. **San Carlos** y **Santa Ana** tienen las medianas más altas, y no se superponen sus notches con las de ríos como Palmas o Soto la Marina. Esto indica diferencias significativas entre estos ríos en cuanto a la abundancia de peces. Por otro lado, **Palmas** exhibe la mediana más baja y una baja variabilidad, lo que sugiere un ecosistema más homogéneo y posiblemente menos favorable.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig4
+#| fig-cap: Variación en la abundancia de peces para los 10 ríos evaluados
+
+# Organización por nivel de magnitud
+ggplot(d_elipses, aes(x = fct_reorder(Rios, Ab_Total),y=Ab_Total)) + 
+  geom_boxplot(notch = T, aes(fill = Rios)) +
+  scale_y_log10() +
+  labs(x = "Ríos muestreados",
+       y = "Abundancia en escala log10",
+       fill = "Ríos muestreados") +
+  theme_bw() +
+  theme(
+    plot.title = 
+      element_text(hjust = 0.5, face = 
+                     "bold", size = 14),  # Centrar el título
+    axis.text.x = element_text(
+      angle = 45, vjust = 1, hjust = 1)  # Rotar nombres de ríos en 45°
+  ) +
+  scale_fill_manual(values = c("blue", "orange", "red", "skyblue", 
+                               "green", "pink", "brown", "purple", 
+                               "turquoise", "salmon"))
+```
+
+------------------------------------------------------------------------
+
+### Figuras multivaraidas de Cajas y bigotes
+
+La @fig-fig5 muestra la distribución de la abundancia de peces (**en escala log10**) en relación con diferentes variables ambientales y según el río muestreado. **El primer panel** muestra la relación entre la abundancia y la profundidad promedio del sitio de muestreo; Soto la Marina presenta las mayores abundancias asociadas con mayor profundidad. **El segundo pane**l muestra la relación entre la abundancia y la especie *Poecilia mexicana*; San Felipe presenta una alta abundancia en sitios donde esta especie está altamente presente. **El tercer panel** muestra la relación entre la abundancia y los sólidos disueltos totales; Soto la Marina y Corona presentan mayores medianas de abundancia asociadas con mayores valores de TDS.
+
+```{r, warning=FALSE,message=FALSE}
+#| label: fig-fig5
+#| fig-cap: Variación en la abundancia de diferentes variables para los diez ríos evaluados.
+
+# Figuras multivariadas de Cajas y bigotes
+d_elipses <- as.data.frame(d_elipses)
+ggplot(melt(d_elipses[,c(2,c(6,40,39,26))]), 
+       aes(x=variable, y=value)) + 
+  geom_boxplot(aes(fill=Rios)) + 
+  scale_y_log10() +
+  scale_fill_manual(values 
+                    = c("blue", "orange", "red", 
+                        "skyblue", "green", "pink", 
+                        "brown", "purple", "turquoise", 
+                        "salmon")) +
+  labs(x="",y="Abundancia en escala log10") + 
+  facet_wrap(~ variable,scales="free") + 
+  theme_bw()
+```
+
+------------------------------------------------------------------------
+
+### Regresión lineal entre la abundancia y la Altitud
+
+La @fig-fig6 muestra una regresión lineal entre la abundancia total de peces y la altitud. Se puede observar un comportamiento lineal ligeramente positivo de las abundancias respecto a la altitud, donde a medida que va aumentanto la altitud, también tiende a aumentar la abundacia de peces. Además, se observa que la mayoría de las abundancias se agrupan en altitudes entre 100 y 500 metros.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig6
+#| fig-cap: Gráfico de regresiones lineales comparando las abundancias en distintas altitudes.
+
+#Figuras de regresión entre la abundancia y la Altitud
+ggplot(d_elipses, aes(x = Alt2, y = Ab_Total) )+
+   geom_point(aes(color = Rios), size = 3) +
+  geom_smooth(method= "lm") + 
+  scale_y_log10() + 
+  labs(x = "Altitud",
+       y = "Abundancia en escala log10")+
+  theme_bw() +
+  theme(panel.grid = element_blank()
+  )
+```
+
+------------------------------------------------------------------------
+
+### Regresión suavizada entre la abundancia y la Altitud
+
+La @fig-fig7 muestra una regresión suavizada entre la abundancia total de peces y la altitud. Se observa una relación de tipo no lineal, que al ser suavizada se ajusta en mejor medidad a los datos dispersos, con una mayor abundancia en las altitudes entre los 200 y 450 metros.
+
+```{r, message=FALSE, warning=FALSE}
+#| label: fig-fig7
+#| fig-cap: Grafico de regresiones suavizadas comparando las abundancias en distintas altitudes.
+#| 
+
+#Figuras de regresión entre la abundancia y la Altitud
+ggplot(d_elipses, aes(x = Alt2, y = Ab_Total) )+
+   geom_point(aes(color = Rios), size = 3) +
+  geom_smooth(span = 0.8) + 
+  scale_y_log10() +
+  labs(x = "Altitud",
+       y = "Abundancia en escala log10")+
+  theme_bw() +
+  theme(panel.grid = element_blank()
+  )
+```
+
+------------------------------------------------------------------------
+
+### Regresión lineal entre la abundancia y los Sólidos Disueltos Totales (TDS)
+
+La @fig-fig8 muestra una regresión lineal entre la abundancia y los Sólidos Totales Disueltos. Se puede observar un comportamiento lineal ligeramente negativo de las abundancias respecto a TDS, donde a medida que va aumentando TDS, tienden a disminuir las abundancias de peces. Además, se observa que la mayoría de las abundancias se agrupan en en TDS entre 100 y 375 ppm.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig8
+#| fig-cap: Grafico de regresiones lineales comparando las abundancias con los Sólidos Disueltos Totales.
+
+# Regresion lineal entre la abundancia y la Conuductividad
+ggplot(d_elipses, aes(x= TDS, y= Ab_Total)  ) +
+   geom_point(aes(color = Rios), size = 3) +
+  geom_smooth(method= "lm")+
+  scale_y_log10() +
+  labs(x = "Sólidos Disueltos Totales",
+       y = "Abundancia en escala log10")+
+  theme(panel.grid = element_blank())
+```
+
+------------------------------------------------------------------------
+
+### Regresión suavizada entre la abundancia y los Sólidos Disueltos Totales
+
+La @fig-fig9 muestra la variación de la abundancia de organismos en función de TDS en los diferentes Ríos muestreados. La curva de regresión suavizada sugiere que la abundancia es menor en valores cercanos a 0 ppm, pero también cuando estos valores son superiores 375 ppm.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig9
+#| fig-cap: Grafico de regresiones suavizadas comparando las abundancias con Sólidos Disueltos Totales.
+
+# Regresion lineal entre la abundancia y el pH
+ggplot(d_elipses, aes(x= TDS, y= Ab_Total)  ) +
+   geom_point(aes(color = Rios), size = 3) +
+  geom_smooth(span = 0.8)+
+  scale_y_log10() +
+  labs(x = "Sólidos Disueltos Totales",
+       y = "Abundancia en escala log10")+
+  theme(panel.grid = element_blank())
+```
+
+------------------------------------------------------------------------
+
+### Grafico de burbujas
+
+En la @fig-fig10 se puede observar que las abundancias estuvieron entre el nivel de pH 6.5 y 8.4, donde fuera de este rango no se registraron muchos individuos. La especie que mayores abundancias regitraron fueron: Pcml con 1500 individuos a un nivel de 8 y Gmbr con 1500 individuos en un nivel de 7.4. El río Arroyo Grande tuvo restringidas sus abundancias en el nivel de pH 6.7. Las abundancias de especies como Pclf, Hrcc y Astm se distribuyeron uniformemente entre los valores de pH 6.5 y 8.4 con menos de 500 individuos por sitio.
+
+```{r}
+#| label: fig-fig10
+#| fig-cap: Grafico de burbujas comparando las abundancias con el nivel de pH en los diferentes Ríos.
+
+# Preparar breviar nombres de los grupos taxonómicos
+biol_amb <- biol_amb %>%
+  arrange(desc(Abundancia)) %>%  
+  mutate(
+    Abrev = fct_inorder(Abrev)  
+  ) %>% 
+  filter(Abundancia>10)
+
+# Crear el gráfico de burbujas
+ggplot(biol_amb, aes(x = pH, y = Abrev, size = Abundancia, color = Rios)) +
+  geom_point(alpha = 0.7) +
+  
+  # Líneas verticales para valores de pH
+  geom_vline(
+    xintercept = seq(6.4, 8.5, by = 0.5),
+    color = "black",
+    linetype = "dashed",
+    linewidth = 0.3
+  ) +
+  # Escalas y ejes
+  scale_size(range = c(1, 8), name = "Abundancia") +
+  scale_x_continuous(
+    limits = c(6.4, 8.5),
+    breaks = seq(6.4, 8.5, by = 0.5),
+    expand = c(0, 0)
+  ) +
+  scale_y_discrete(limits = rev) +  
+  # Configuración del tema sin líneas de grid
+  theme_bw() +
+  theme(panel.grid = element_blank(),  
+    panel.border = element_rect(
+      color = "black", fill = NA),
+    axis.ticks.y = element_blank(),
+    axis.text = element_text(size = 10),
+    axis.title.x = element_text(
+      size = 12, face = "bold", 
+      margin = margin(t = 10)),
+    legend.position = "right",
+    legend.box = "vertical") +
+  
+  
+  labs(
+    x = "pH",
+    y = "Especies",
+    color = "Ríos"
+  ) +
+  guides(size = guide_legend(title = NULL, 
+                        override.aes = list(shape = 1, 
+                                            color = "#377eb8",
+                                            stroke = 1.2)),  
+  # Circulos de las Layers en la leyenda
+color = guide_legend(title = NULL)   #  Eliminar el título de la leyenda para "group"
+  )
+```
+
+------------------------------------------------------------------------
+
+## PCA
+
+### 1. Ajuste de las bases de datos fisiqcoquimica (amb) y biológica (tax.hel)
+
+```{r}
+d_elipses <- read_xlsx("datos_PCA.xlsx", sheet = "Hoja2")
+```
+
+```{r}
+# Variables ambientales con transformación logarítmica
+amb1=log10(d_elipses[,c(4:8, 25:29, 33, 36, 39)]+1)
+```
+
+```{r}
+# Variables biológicas linealizadas - Taxones con Hellinger
+tax.hel=decostand(d_elipses[,c(40:51)],"hellinger")
+```
+
+### **2. PCA con paquete factoextra**
+
+La @tbl-tbl4 muestra que la varianza acumulada de los dos primeros componentes principales es 0.66 o del 66%, lo cual indica una buena configuración de los datos para la ordenación del PCA.
+
+```{r}
+#| label: tbl-tbl4
+#| tbl-cap: Porcentaje de varianza de los dos primeros componentes principales
+
+# Variables ambientales con transformación logarítmica
+amb1=log10(d_elipses[,c(4:8, 25:29, 33, 36, 39)]+1)
+
+# PCA
+pca1 <- prcomp(amb1)
+summary(pca1)$"importance"[,1:2] %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+------------------------------------------------------------------------
+
+#### **2.1. Contribución eje 1**
+
+La @fig-fig11 muestra aquellas variables más influyentes y que superen el umbral de contribución (por encima de la línea roja punteada) para el primer componente principal, donde Altitud (**Alt2**) fue la variable ambiental que más contribuyó, seguido de Anchura de la superficie del agua (**Wotws**) y la Profundidad Media de la Zona Muestreada (**Adotsa**). Esto indica que estas variables tienen un papel clave en la diferenciación de los sitios analizados y probablemente en la estructuración de las comunidades de peces.
+
+```{r}
+#| label: fig-fig11
+#| fig-cap: Patrón de importancia de las variables ambientales en el primer componente principal
+
+# 2.1 Contribución del eje 1
+fviz_contrib(pca1,choice="var",axes=1) + 
+             labs(title = "Contribución de las variables en el PC1",
+                  y = "Contribuciones (%)",
+                  x= "Variables ambientales") +
+  theme_bw() +
+  theme(panel.grid = element_blank(), axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+------------------------------------------------------------------------
+
+### 3. PCA con ggplot
+
+```{r}
+d_elipses <- d_elipses %>% 
+  mutate(Zona = case_when(
+    Alt2 <= 10  ~ "Baja",
+    Alt2 >= 11  & Alt2 < 199 ~ "Medio",
+    Alt2 > 200  ~ "Alto"
+  ))
+```
+
+```{r}
+pca <- prcomp(tax.hel)
+```
+
+#### **3.1. Coordenadas de los sitios y el factor “coord.sit**
+
+```{r, warning=FALSE}
+# 4.1 Coordenadas de los sitios y el factor “coord.sit"
+coord.sit <- as.data.frame(pca$x[,1:2])     # Coordenadas de los sitios
+coord.sit$sitios <- rownames(coord.sit)     # Crear una columna con nombres de los sitios
+coord.sit$grp <-  d_elipses$Zona            # Adicionar columna de grupos por Zona
+```
+
+#### **3.2. Coordenadas de los taxones “coord.tax”**
+
+```{r}
+# 4.2 Coordenadas de los taxones “coord.tax”
+coord.tax <- as.data.frame(pca$rotation[,1:2])    # Dos primeros ejes
+coord.tax$especies <- rownames(coord.tax)         # Insertar columna con nombres de las especies
+```
+
+#### **3.3. Coordenadas de las ambientales “coord.amb”**
+
+```{r}
+# 4.3 Coordenadas de las ambientales “coord.amb”
+amb2 = envfit(pca,amb1) 
+coord.amb = as.data.frame(amb2$"vectors"$arrows[,1:2])
+# coord.amb = as.data.frame(scores(amb2, "vectors"))
+coord.amb$amb1 <- rownames(coord.amb)  
+```
+
+#### **3.4. Figura con de elipses por concavidades - geom_mark_hull**
+
+La @fig-fig12 muestra que a mayor altitud (grupo "Alto"), algunas variables biológicas como *Poecilia mexicana* y la abundancia total están más correlacionadas negativamente con el PC1, lo cual podría estar relacionado con cambios en la composición de especies o condiciones ambientales. En contraste, el grupo "Bajo" se separa claramente hacia la parte superior derecha, posiblemente por la influencia de variables como Salinidad y Conductividad.
+
+```{r, warning=FALSE, fig.height=8}
+#| label: fig-fig12
+#| fig-cap: Ordenación de los tributarios, la composición de las especies de peces y las variables ambientales.
+
+# 4.4 Figura con de elipses por concavidades - geom_mark_hull
+ggplot() +
+  # *Sitios
+  geom_text_repel(data = coord.sit,aes(PC1,PC2,label=row.names(coord.sit)),
+                  size=4)+   # Muestra el cuadro de la figura
+  geom_point(data = coord.sit,aes(PC1,PC2,colour=grp),size=4)+
+  scale_shape_manual(values = c(21:25))+
+  
+  # Taxones  *valores de cero para caracteres de las flechas (arrow)
+  geom_segment(data = coord.tax,aes(x = 0, y = 0, xend = PC1, yend = PC2), 
+               arrow = arrow(angle=0,length = unit(0,"cm"),
+                             type = "closed"),linetype=0, size=0,colour = "red")+
+  geom_text_repel(data = coord.tax,aes(PC1,PC2,label=especies),colour = "red")+
+  
+  # Ambiental  
+  geom_segment(data = coord.amb,aes(x = 0, y = 0, xend = PC1/2.5, yend = PC2/2.5), 
+               arrow = arrow(angle=22.5,length = unit(0.25,"cm"),
+                       type = "closed"),linetype=1, size=0.6,colour = "blue")+
+  geom_text_repel(data = coord.amb,aes(PC1,PC2,label=row.names(coord.amb)),
+                       colour = "#00abff")+
+  # Factor
+  geom_mark_hull(data=coord.sit, aes(x=PC1,y=PC2,fill=grp,group=grp,
+                                     colour=grp),alpha=0.15)  +
+  
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL))+
+  theme_bw()+theme(panel.grid=element_blank())
+```
+
+------------------------------------------------------------------------
+
+#### **3.5. Figura con de elipses por cada zona**
+
+En la figura @fig-fig13 se observo un agrupamiento de las variables biologicas en los tres sitios, donde se observaron diferencias entre las especies en zonas altas con las dos zonas restantes. Se observo una maypr variabilidad en el el grupo medio, debido a que es el que mayor largo y ancho poseen.
+
+```{r}
+#| label: fig-fig13
+#| fig-cap: Distribución de las variables ambientales y especies en el espacio de componentes principales por cada zona de altitud con la libreria factorextra
+
+fviz_pca_ind(pca1, geom.ind = "point", 
+        col.ind = d_elipses$Zona,   # Colores por grupo - río
+        palette = c("#00AFBB", "#E7B800", "red"),
+        addEllipses = TRUE, ellipse.type = "confidence",
+        legend.title = "Zonas") + 
+             labs(y = "PC2",
+                  x= "PC1") +
+  theme_bw() +
+  theme(panel.grid = element_blank())
+```
+
+------------------------------------------------------------------------
+
+## NMDS
+
+```{r}
+# Bases datos
+spe <- read_excel("peces marinos méxico_biológicos.xlsx", sheet = "Hoja2", col_names = TRUE)
+
+env <- read_excel("peces marinos méxico_ambientales.xlsx", sheet = "Hoja2",col_names = TRUE)
+```
+
+```{r}
+spe <- spe %>% 
+  select_at(vars(c(2:90)))
+env <- env %>% 
+  select_at(vars(c(3:7, 24:25, 27, 35, 38)))
+```
+
+```{r}
+# Transformación de abundancias
+spe.h = decostand(spe, "hellinger")
+head(round(spe.h,3)) %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+------------------------------------------------------------------------
+
+### **1. Ordenación con NMDS - paquete vegan**
+
+#### **Paso 1. Correr el NMDS y analizar la disitancia usada y el estrés**
+
+La distancia utilizada es la Bray-Curtis. El estrés es 0.13 (13%), que corresponde a una buena configuración del análisis multivariado.
+
+```{r}
+# Escalamiento multidimensional "spe.nmds"
+spe.mds <- metaMDS(spe.h, 
+                    distance = "bray",
+                    trace = FALSE)
+spe.mds
+```
+
+#### **Paso 2. Figuras del nmds con el paquete “vegan”**
+
+```{r, fig.height=9}
+# 1. Figura con todas las especies
+plot(spe.mds,type = "t",cex=1.2,     # type="t" grafica sitios y especies
+     ylab="Dim 2", xlab="Dim 1",     # main: Título de la figura
+     main = paste("nMDS/Estrés =",     
+     round(spe.mds$stress, 3)))      # spe.mds$stress: valor del estrés
+abline(v=0, lty=2, col=4)
+abline(h=0, lty=2, col=4)
+```
+
+------------------------------------------------------------------------
+
+#### **Figura del NMDS con el comando *orditorp***
+
+```{r, warning=FALSE, fig.height=8}
+#| label: fig-fig14
+#| fig-cap: Ordenación de las especies de peces con los sitios evaluados.
+
+# 2. Figura sin solapamiento de especies - comando "orditorp"
+plot(spe.mds,type = "n",
+     display = c("sites", "species"),          # type="n" sin texto.
+     ylab="Dim 2", xlab="Dim 1",
+     main = paste("nMDS/Estrés =",             # R?tulo del título.
+     round(spe.mds$stress, 3)))
+
+text(spe.mds, display="sites",                 # Grafica los sitios
+     cex=1, col="blue", lwd=1.5, pos=3)
+
+ordi= orditorp(spe.mds, display = "species",   # Grafica especies sin solapar
+      shrink = FALSE, col = "red", type="n",cex=1.2) 
+
+points(spe.mds, display = "sites",             # Opcional - puntos de muestreo
+       cex = 0.6, col = "lightblue", lwd=1.5)
+
+abline(h=0, lty=2, col=4)
+abline(v=0, lty=2, col=4)
+
+```
+
+------------------------------------------------------------------------
+
+#### **Figura del NMDS con variables ambientales**
+
+Al observar como se relacionan los vectores de las variables ambientales con los ejes del NMDS, donde se obtuvieron variables que contribuyen significativamente, como lo son: Adotsa, Wotws, Alt2, Cndc, Slnt. Las variables que obtuvieron mayor contribución se tuvieron en cuenta para realizar la exploración grafica.
+
+```{r}
+# Insertar variables ambientales al nMDS
+# Ambientales (env)
+env1 = envfit(spe.mds,env)
+env1
+```
+
+```{r, warning=FALSE, fig.height=8}
+# 2. Figura sin solapamiento de especies - comando "orditorp"
+plot(spe.mds,type = "n",
+     display = c("sites", "species"),          # type="n" sin texto.
+     ylab="Dim 2", xlab="Dim 1",
+     main = paste("nMDS/Estrés =",             # R?tulo del título.
+     round(spe.mds$stress, 3)))
+
+text(spe.mds, display="sites",                 # Grafica los sitios
+     cex=1, col="blue", lwd=1.5, pos=3)
+
+ordi= orditorp(spe.mds, display = "species",   # Grafica especies sin solapar
+      shrink = FALSE, col = "red", type="n",cex=1.2) 
+
+plot(env1,p.max=0.05,col=3)
+
+points(spe.mds, display = "sites",             # Opcional - puntos de muestreo
+       cex = 0.6, col = "lightblue", lwd=1.5)
+
+abline(h=0, lty=2, col=4)
+abline(v=0, lty=2, col=4)
+
+```
+
+------------------------------------------------------------------------
+
+### **Generación de factores (variables agrupadoras)**
+
+En la @tbl-tbl5 se realizo 3 agrupaciones de los datos biologicos de las especies, teniendo en cuenta las 3 zonas de altitud.
+
+```{r}
+#| label: tbl-tbl5
+#| tbl-cap: Resumen con las 10 primeras filas de los datos de abundancia de peces, clasificados en tres grupos (k = 3)
+
+datos.w <- hclust(vegdist(spe), "ward.D")  # Grupos con Cluster con ward
+gr <- cutree(datos.w, k = 3)        # Generar 4 grupos (factor gr)
+datos.gr=data.frame(gr,spe)         # Base de datos con el factor agrupador
+datos.gr$gr=as.factor(datos.gr$gr)  # Crear la columna gr como factor
+
+# Presentación de la tabla con las 10 primeras filas
+datos.gr[1:10,] %>% 
+  kbl(booktabs = F) %>% 
+  kable_classic(full_width=F, html_font = "Cambria")
+```
+
+------------------------------------------------------------------------
+
+### **2. Ordenación NMDS con ggplot2**
+
+```{r}
+# Escalamiento multidimensional "spe.nmds"
+spe.mds <- metaMDS(spe.h, 
+                    distance = "bray",
+                    trace = FALSE)
+```
+
+#### **2.1 Coordenadas de los sitios y el factor “coord.sit”**
+
+```{r}
+#| label: tbl-tbl6
+#| tbl-cap: Primeras seis filas de las coordenadas de los sitios
+
+coord.sit <- as.data.frame(spe.mds$points)      # Coordenadas de los sitios
+coord.sit$sitio <- rownames(coord.sit)          # Crear una columna con nombres de los sitios
+coord.sit$grp <-  datos.gr$gr                   # Adicionar columna de grupos por especie
+colnames(coord.sit)<- c("NMDS1","NMDS2","sitio","grp")
+head(coord.sit) %>% 
+  kbl() %>% 
+  kable_classic(full_width=FALSE)
+```
+
+------------------------------------------------------------------------
+
+#### **2.2 Coordenadas de las especies “coord.esp”**
+
+```{r}
+#| label: tbl-tbl7
+#| tbl-cap: Primeras seis filas de las coordenadas de las especies
+
+# Obtener coordenadas de especies (usando el método correcto para metaMDS)
+coord.esp <- as.data.frame(spe.mds$species)  # Alternativa directa
+
+# O la forma más robusta:
+coord.esp <- as.data.frame(vegan::scores(spe.mds, display = "species", choices = c(1,2)))
+
+# Añadir nombres de especies
+coord.esp$especies <- rownames(coord.esp)
+
+# Mostrar primeras filas (con kableExtra si lo deseas)
+head(coord.esp) %>% 
+  kbl() %>% 
+  kable_classic(full_width = FALSE)
+```
+
+------------------------------------------------------------------------
+
+#### **2.3 Coordenadas de las ambientales “coord.amb”**
+
+```{r}
+#| label: tbl-tbl8
+#| tbl-cap: Primeras seis filas de las coordenadas de las variables ambientales
+
+amb = envfit(spe.mds,env) 
+coord.amb = as.data.frame(amb$vectors$arrows)
+coord.amb$amb <- rownames(coord.amb)         # Insertar columna con nombres de las ambientales
+head(coord.amb) %>% 
+  kbl() %>% 
+  kable_classic(full_width=FALSE)
+# Para los casos en los que "vectors" no funcione, aplicar:
+# coord.amb = as.data.frame(amb$vectors$arrows)
+```
+
+------------------------------------------------------------------------
+
+#### **2.4 Figura de elipses por concavidades - geom_mark_elipse**
+
+```{r, warning=FALSE, fig.height=7}
+ggplot() +
+  # Factor
+  geom_mark_ellipse(data=coord.sit,aes(x=NMDS1, y=NMDS2, 
+                    colour=grp,fill=grp), alpha=0.2, 
+                    expand=0, size=0.2) +
+  # Sitios
+  geom_text_repel(data = coord.sit,aes(NMDS1,NMDS2,label=row.names(coord.sit)),
+                  size=4)+   # Muestra el cuadro de la figura
+  geom_point(data = coord.sit,aes(NMDS1,NMDS2,colour=grp),size=4)+
+  scale_shape_manual(values = c(21:25)) +
+  
+  # Taxones  *valores de cero para caracteres de las flechas (arrow)
+  geom_segment(data = coord.esp,aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2), 
+               arrow = arrow(angle=0,length = unit(0,"cm"),
+                             type = "closed"),linetype=0, size=0,colour = "red")+
+  geom_text_repel(data = coord.esp,aes(NMDS1,NMDS2,label=especies),colour = "red") +
+
+  
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL))+
+  theme_bw()+theme(panel.grid=element_blank())
+```
+
+#### **2.5 Figura con vectores de especies y variables ambientales**
+
+En la @fig-fig16 se puede observar que hay 3 grupos en los que se agruparon las abundancias, donde el grupo 1 y 2 mostraron similitudes entres si, sin embargo, el grupo 3 tuvo considerables diferencias entre los otros grupos. Las variables ambientales que mejor explicaron las abundancias fueron la salinidad, conductividad y TDS. Especies como Hrcl y Mglc no se agruparon con ninguno de los grupos.
+
+```{r, warning=FALSE, fig.height=7}
+#| label: fig-fig16
+#| fig-cap: Ordenación de las localidades, los tres grupos, la composición de especies de peces en la cuenca del río Soto La Marina, México y su relación con las variables ambientales.
+
+ggplot() +
+  # Factor
+geom_mark_ellipse(data=coord.sit, aes(x=NMDS1,y=NMDS2,fill=grp,group=grp,
+                                     colour=grp),alpha=0.30)  +
+  
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL))+
+  theme_bw()+theme(panel.grid=element_blank()) +
+  
+  # Sitios
+  geom_text_repel(data = coord.sit,aes(NMDS1,NMDS2,label=row.names(coord.sit)),
+                  size=4)+   # Muestra el cuadro de la figura
+  geom_point(data = coord.sit,aes(NMDS1,NMDS2,colour=grp),size=4)+
+  scale_shape_manual(values = c(21:25)) +
+  
+  # Taxones  *valores de cero para caracteres de las flechas (arrow)
+  geom_segment(data = coord.esp,aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2), 
+               arrow = arrow(angle=0,length = unit(0,"cm"),
+                             type = "closed"),linetype=0, size=0,colour = "red")+
+  geom_text_repel(data = coord.esp,aes(NMDS1,NMDS2,label=especies),colour = "red") +
+
+  # Ambiental  
+  geom_segment(data = coord.amb,aes(x = 0, y = 0, xend = NMDS1, yend = NMDS2), 
+               arrow = arrow(angle=22.5,length = unit(0.25,"cm"),
+                             type = "closed"),linetype=1, size=0.6,colour = "blue")+
+  geom_text_repel(data = coord.amb,aes(NMDS1,NMDS2,label=row.names(coord.amb)),colour = "blue") 
+```
+
+------------------------------------------------------------------------
+
+## Análisis de clúster (cla)
+
+### **Análisis de Clúster con datos ambientales**
+
+#### Cargar la base de datos
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+# Base de datos
+amb_cl <- d_elipses %>% 
+   dplyr::select(1, 3:39)
+
+# Asignar los nombres de los sitios como rownames
+rownames(amb_cl) <- amb_cl$Sitios
+```
+
+#### **Paso 1. Distancia entre observaciones**
+
+```{r, message=FALSE, warning=FALSE}
+# Matriz de distancia
+d.euclid <- dist(amb_cl)
+# round(d.euclid, 2)
+```
+
+#### **Paso 2. Elección del mejor método de agrupación**
+
+##### **2.1 Siete métodos de agrupamiento**
+
+```{r}
+# Método 1. Vecino más cercano, método "single"
+Cl.single <- hclust(d.euclid,method="single")
+
+# Método 2. Vecino más lejano función "complete"  
+Cl.complete<-hclust(d.euclid,method="complete")
+
+# Método 3. UPGMA función "average" Unión Promedio no Ponderado
+Cl.upgma<-hclust(d.euclid,method="average")
+
+# Método 4. UPGMC función "mcquitty" Unión Promedio Ponderado
+Cl.upgmc<-hclust(d.euclid,method="mcquitty")
+
+# Método 5. WPGMA función "centroid"
+Cl.wpgma<-hclust(d.euclid,method="centroid")
+
+# Método 6. WPGMC función "median"
+Cl.wpgmc<-hclust(d.euclid,method="median")
+
+# Método 7. WARD, función "ward"
+Cl.ward<-hclust(d.euclid,method="ward.D")
+```
+
+------------------------------------------------------------------------
+
+##### **2.2 Graficar los 7 dendogramas**
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig17
+#| fig-cap: Cuatro dendogramas jerárquicos con la distancia euclídea.
+
+f1 <- fviz_dend(Cl.single, k = 2,        # k grupos (opcionales)
+          cex = 0.6,               # tamaño del texto de las ramas
+          ylab = "D.Euclidea",  # Rotulo de la distancia
+          main = "Vecino más Cercano - Single")  # Rotulo de título
+
+f2 <- fviz_dend(Cl.complete, k = 2,        # k grupos (opcionales)
+          cex = 0.6,               # tamaño del texto de las ramas
+          ylab = "D.Euclidea",  # Rotulo de la distancia
+          main = "Vecino más Lejano - Complete")  # Rotulo de título
+
+# Continuación del código anterior:
+f3 <- fviz_dend(Cl.upgma, k = 2,           # k grupos (opcionales)
+          cex = 0.6,                 # tamaño del texto de las ramas
+          ylab = "D.Euclidea",  # Rotulo de la distancia
+          main = "Unión Promedio no Ponderado - upgma")  # Título
+
+f4 <- fviz_dend(Cl.upgmc, k = 2,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Unión Promedio Ponderado - upgmc") 
+
+grid.arrange(f1,f2,f3,f4, ncol = 1)
+```
+
+```{r, warning=FALSE}
+#| label: fig-fig18
+#| fig-cap: Tres dendogramas jerárquicos restantes, con la distancia euclídea.
+
+
+f5 <- fviz_dend(Cl.wpgma, k = 2,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Unión Centroide no Ponderado - wpgma") 
+
+f6 <- fviz_dend(Cl.wpgmc, k = 2,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Unión Centroide Ponderado - wpgmc") 
+
+f7 <- fviz_dend(Cl.ward, k = 2,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Método de Ward") 
+
+grid.arrange(f5,f6,f7, ncol = 1)
+```
+
+------------------------------------------------------------------------
+
+##### 2.3. Correlación cofenetica
+
+```{r}
+# (1) Correlación cofenpetica  para "single"
+cofenet1 <- cophenetic(Cl.single)
+simple = cor(d.euclid,cofenet1)
+simple
+```
+
+```{r}
+# (2) Correlación cofenética  para "complete"
+cofenet2<-cophenetic(Cl.complete)
+compl = cor(d.euclid,cofenet2)
+compl
+```
+
+```{r}
+# (3) Correlación cofenética  para "average"
+cofenet3<-cophenetic(Cl.upgma)
+upgma = cor(d.euclid,cofenet3)
+upgma
+```
+
+```{r}
+# (4) CCorrelación cofenética  para "mcquitty"
+cofenet4<-cophenetic(Cl.upgmc)
+upgmc = cor(d.euclid,cofenet4)
+upgmc
+```
+
+```{r}
+# (5) Correlación cofenética  para "centroid"
+cofenet5<-cophenetic(Cl.wpgma)
+wpgma = cor(d.euclid,cofenet5)
+wpgma
+```
+
+```{r}
+# (6) Correlación cofenética  para "median"
+cofenet6<-cophenetic(Cl.wpgmc)
+wpgmc = cor(d.euclid,cofenet6)
+wpgmc
+```
+
+```{r}
+# (7) Correlación cofenética  para "ward"
+cofenet7<-cophenetic(Cl.ward)
+ward = cor(d.euclid,cofenet7)
+ward
+```
+
+La @tbl-tbl9 muestra los valores de los cofenéticos, donde se observa que **ugma** (0.918) fue el de mayor valor por lo tanto es el más óptimo para realizar el clúster
+
+```{r}
+#| label: tbl-tbl9
+#| tbl-cap: Valores de los cofenéticos para la realización del Cluster. 
+
+# data frame con cofenéticos
+cofeneticos = data.frame(simple,compl,upgma,upgmc,
+                         wpgma,wpgmc,ward)
+
+# cofenéticos por cada métodos (Met)
+cofenet=data.frame(Met = 1:7,Cofen=t(round(cofeneticos,3)))
+
+# tabla con orden descendente de cofenéticos
+cof_ordenado = cofenet[order(cofenet$Cofen, decreasing = TRUE), ]
+
+# Impresión de la tabla con los datos
+cof_ordenado %>%
+  kbl(caption = "", booktabs = F,longtable = T) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 3. Número de grupos formados**
+
+##### **Opción 1. Niveles de Fusión**
+
+En la @fig-fig19 muestra que la mayor amplitud se presenta en 2 k cluster, por lo cual, el dendograma se puede clasificar en dos grupos de observaciones.
+
+```{r}
+#| label: fig-fig19
+#| fig-cap: Dos regresiones entre la distancia euclídea empleada y las distancias cofenéticas de cada método de agrupamiento definido.
+
+# Data.frame con los datos de altura, k y número de cluster
+f1 <- data.frame(h = Cl.upgma$height, k = nrow(amb_cl):2, 
+                 cluster = nrow(amb_cl):2)
+
+# Crear el gráfico de dispersión y agregar etiquetas de texto
+ggplot(f1, aes(x = h, y = k, label = cluster)) +
+  geom_point(color = "grey") +
+  geom_text(color = "red", size = 3, vjust = -0.5) +
+  geom_step(color = "grey", direction = "vh") +
+
+# Personalizar el gráfico con títulos, etiquetas de ejes y 
+# paleta de colores
+  ggtitle("Niveles de Fusión - Distancia Euclídea - UPGMA") +
+  ylab("k (Número de Cluster)") +
+  xlab("h (Altura del Nodo)") +
+  scale_color_manual(values = c("grey", "red")) +
+  theme(axis.title = element_text(size = 16)) +
+  theme_classic()
+```
+
+------------------------------------------------------------------------
+
+##### **Opción 2. Amplitud de silueta (3 insumos requeridos)**
+
+```{r, warning=FALSE}
+# 1) Base de datos (amb)
+amb_cl <- d_elipses %>% 
+   dplyr::select(1, 3:39)
+rownames(amb_cl) <- amb_cl$Sitios
+
+# 2) Distancia utilizada (d.euclid)
+d.euclid <- dist(amb_cl)
+
+# 3) Método de agrupamiento seleccionado (cl.upgma)
+Cl.upgma<-hclust(d.euclid,method="average")
+```
+
+```{r}
+# 1. Crear un vector vacío (amb.vacio) con asw valores
+amb.vacio <- numeric(nrow(amb_cl))
+
+# 2. Silueta "sil" 
+for(k in 2: (nrow(amb_cl)-1)){
+    sil <- silhouette(cutree(Cl.upgma,k=k),d.euclid)
+    amb.vacio[k]<-summary(sil)$avg.width} 
+
+# 3. Mejor o mayor amplitud de silueta (2 particiones)
+k.mejor <- which.max(amb.vacio)
+k.mejor 
+```
+
+------------------------------------------------------------------------
+
+La @fig-fig20 muestra que el valor máximo de la silueta es alcanzado con 2 clústeres, lo que indica que esta configuración proporciona la mejor separación entre grupos
+
+```{r}
+#| label: fig-fig20
+#| fig-cap: Determinación del número optimo de clústeres para datos ambientales.
+
+# Grafica de silueta
+plot(1:nrow(amb_cl),amb.vacio,type="h",
+     main="Silueta-Número Óptimo de Clusters", 
+     xlab="(Número de grupos)",
+     ylab="Amplitud promedio de  silueta")
+     
+axis(1,k.mejor,paste("optimum",k.mejor,sep="\n"),col="red",
+     font=2,col.axis="red")
+     
+points(k.mejor,max(amb.vacio),pch=16,col="red",cex=1.5)
+```
+
+```{r}
+cat("","Silueta-Número óptimo de Clusters k=",k.mejor,
+    "\n","Con una aplitud promedio de silueta",max(amb.vacio),"\n")
+```
+
+------------------------------------------------------------------------
+
+#### **Figura del dendograma jerárquico final**
+
+La @fig-fig21 La figura nos muestra una clara diferenciación en dos grupos, donde los sitios 42RM, 23P y 43RM son indiscutiblemente un grupo (Color rojo) diferente a los demás sitios (Color azul), donde el grupo rojo podría tener condiciones ambientales únicas, lo que nos sugiere que puede haber dos regiones ambientales. Además, esta separación ocurre a una distancia alta de 1500 más o menos, lo que indica diferencias marcadas entre ambos grupos.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig21
+#| fig-cap: Agrupamiento jerárquico de sitios en función a las variables ambientales (UPGMA).
+
+# Dendograma final 
+fviz_dend(Cl.upgma, k = 2,    # k grupos
+          cex = 0.7,          # tamaño del texto de las observaciones
+          ylab = "Distancia Euclídea",  # Rotulo de la distancia
+          main = "Unión Promedio no Ponderada (UPGMA)", # Título
+          lower_rect = 0,         # Inicio de los rectángulos en cero
+          k_colors = c("#00AFBB","#FC4E07"),
+          color_labels_by_k = TRUE,    # Colores para cada grupo
+          rect = TRUE)                 # Rectángulos de cada grupo
+```
+
+------------------------------------------------------------------------
+
+#### **Figura del dendograma no jerárquico final**
+
+```{r, warning=FALSE}
+# Paso 1. Matriz de distancia 
+d.euclid <- dist(amb_cl)
+
+# Paso 2. Método de Agrupamiento seleccionado: UPGMA
+Cl.upgma<-hclust(d.euclid,method="average") 
+```
+
+```{r}
+# Variable agrupadora con k=2 clúster
+grp <- cutree(Cl.upgma, k = 2)    # Grupos generados "grp"  
+grl <- levels(factor(grp))        # Rotulos de los grupos formados 
+```
+
+```{r}
+# Incluir la variable agrupadora en la base de datos
+datos.1=data.frame(grp,d_elipses[,1],amb_cl)       # Nuevo dataframe con la variable agrupadora (gr)
+head (datos.1) %>% 
+  kbl(caption = "", booktabs = F,longtable = T) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r}
+#| label: fig-fig22
+#| fig-cap: Agrupamiento no jerárquico de sitios en función a las variables ambientales (UPGMA).
+
+fviz_cluster(list(data = datos.1[,c(-1, -2, -3)], cluster = grp),
+             palette = c("#2E9FDF", "#FC4E07", "#2E9FDF"),  # Colores para cada grupo
+             ellipse.type = "confidence",        # Elipses
+             repel = TRUE,                 # Elimina solapamiento de observaciones
+             show.clust.cent = FALSE,      # Muestra a los clúster centrados
+             ggtheme = theme_bw())     # Tipo de fondo tomado de ggplot2
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 4. Variables de mayor contrinución a la clasificación**
+
+##### **Mapas de calor (opción 1)**
+
+```{r, warning=FALSE}
+# Seleccionar columnas específicas
+amb_cl1 <- d_elipses[, c(1, 6, 7, 8, 26, 28, 30, 33, 37, 39)]
+# Asignar los nombres de los sitios como rownames
+rownames(amb_cl1) <- amb_cl1$Sitios
+amb_cl1 <- amb_cl1[, -1]
+
+# Convertir a matriz
+amb_cl1 <- as.matrix(amb_cl1)
+```
+
+La @fig-fig23 muestra que la conductividad (Cndc), la dureza (Hrdn), los sólidos disueltos totales (TDS) y la altitud (Alt2) son los factores que más contribuyen a la diferenciación entre sitios, representados en tonalidades rojas intensas. Esta agrupación sugiere que las condiciones fisicoquímicas del agua, asociadas principalmente a la mineralización y características topográficas, juegan un papel clave en la estructuración ambiental de las zonas estudiadas. En contraste, variables como Trms, Profundidad Media de la Zona Muestreada (Adotsa) y el máximo de oxígeno medido (Mxomd) presentan menor variabilidad entre sitios, reflejando una influencia secundaria en la clasificación.
+
+```{r, fig.height=8.6}
+#| label: fig-fig23
+#| fig-cap: Mapa de calor que define a las variables ambientales de mayor aporte a la clasificación realizada.
+
+# Opción 1. Mapa de calor con paquete "stats"
+hv <- heatmap(amb_cl1, margins=c(10,8), 
+              distfun = dist,
+              xlab ="Variables Ambientales",
+              ylab= "Sitios", 
+              main = "Clasificación de Sitios",
+              scale = "row")   # Estandariza variables diferentes.
+```
+
+------------------------------------------------------------------------
+
+##### **Mapas de calor (opción 2)**
+
+```{r, fig.height=8.4}
+# Opción 2. Mapa de calor con paquete "gclust"
+
+# Opción 2. Mapa de calor con paquete "stats"
+hclust.fq <- function(amb_cl1) hclust(amb_cl1, method="average")   # Inserción de agrupación UPGMA
+
+heatmap.2(amb_cl1,               # Base de datos en formato matricial
+          margins=c(7,7),     # Margenes de la figura
+          scale = "row",      # Estandariza variables diferentes.
+          col = bluered(100),                 # Colores del mapa de calor
+          xlab ="Variables Ambientales",
+          ylab= "Sitios", 
+          main = "Clasificación de Sitios",
+          trace = "none", 
+          density.info = "none",
+          distfun = dist,          # Se puede usar vegdist de "vegan" 
+          hclustfun=hclust.fq)     # Agrupamiento UPGMA
+```
+
+------------------------------------------------------------------------
+
+##### **Mapas de calor (opción 3)**
+
+```{r, warning=FALSE}
+# Mapas de calor (opción 3)
+# Extracción de los promedios de las variables para cada sitio
+library(tidyverse)
+promedios <- 
+  d_elipses %>%      
+  dplyr::select(Sitios, `Adotsa`, `Mxmd`, `Wotws`, `Alt2`, `Cndc`, `Trns`, `Alkl`, `Hrdn`, `TDS`) %>%
+  na.omit() %>%
+  group_by(Sitios) %>%
+  summarise(across(everything(), mean, na.rm = TRUE))
+  
+promedios  <- data.frame(promedios) # Guardar promedios como dataframe
+# promedios
+```
+
+```{r}
+# Seleccionar columnas de 2 a 10 del data frame peces1 y convertirlas en matriz
+promedios2 <- promedios %>% 
+              subset(select = c(2:10)) %>% 
+              as.matrix()
+head (round(promedios2[,1:9],2)) # Visualización de las 10 primeras variables
+```
+
+```{r}
+# Asignar los valores de la primera columna de promedios[,1] 
+# como nombres de fila en la matriz promedios2
+rownames(promedios2) <- promedios[,1]
+```
+
+```{r, fig.height=7.5}
+# Figura del primer mapa de calor
+hv <- heatmap(promedios2, 
+              margins = c(5,12), 
+              distfun = dist,
+              xlab ="Variables Ambientales", 
+              ylab= "Grupos de Sitios", 
+              main = "Clasificación de Sitios")
+```
+
+------------------------------------------------------------------------
+
+##### Mapa con paquete "ggplots"
+
+```{r}
+# Opción 2. Mapa de calor con paquete "gplots"
+hclust.fq <- function(promedios2) 
+             hclust(promedios2, method="average")   # Inserción de UPGMA
+```
+
+```{r, fig.height=8}
+library("gplots")
+heatmap.2(promedios2,         # Base de datos en formato matricial
+          margins=c(5,12),    # Margenes de la figura
+          scale = "row",      # Estandariza variables diferentes.
+          col = bluered(100),                 # Colores del mapa de calor
+          xlab ="Variables Ambientales", 
+          ylab= "Grupos de Sitios", 
+          main = "Clasificación de Sitios",   
+          trace = "none", 
+          density.info = "none",
+          distfun = dist,          # Se puede usar vegdist de "vegan" 
+          hclustfun=hclust.fq)     # Agrupamiento UPGMA
+```
+
+------------------------------------------------------------------------
+
+### **Análisis de Clúster con datos biológicos**
+
+### Cargar base de datos
+
+```{r, warning=FALSE}
+biol_cl <- read_excel("peces marinos méxico_biológicos.xlsx", col_names = TRUE)
+rownames(biol_cl) <- biol_cl$Sitios
+```
+
+#### **Paso 1. Distancia entre observaciones**
+
+```{r, warning=FALSE}
+# Matriz de distancia
+d.euclid2 <- dist(biol_cl)
+#  round(d.euclid2, 2)
+```
+
+#### **Paso 2. Elección del mejor método de agrupación**
+
+##### **2.1 Siete métodos de agrupamiento**
+
+```{r}
+# Método 1. Vecino más cercano, método "single"
+Cl.single2 <- hclust(d.euclid2,method="single")
+
+# Método 2. Vecino más lejano función "complete"  
+Cl.complete2 <-hclust(d.euclid2,method="complete")
+
+# Método 3. UPGMA función "average" Unión Promedio no Ponderado
+Cl.upgma2 <-hclust(d.euclid2,method="average")
+
+# Método 4. UPGMC función "mcquitty" Unión Promedio Ponderado
+Cl.upgmc2 <-hclust(d.euclid2,method="mcquitty")
+
+# Método 5. WPGMA función "centroid"
+Cl.wpgma2 <-hclust(d.euclid2,method="centroid")
+
+# Método 6. WPGMC función "median"
+Cl.wpgmc2 <-hclust(d.euclid2,method="median")
+
+# Método 7. WARD, función "ward"
+Cl.ward2 <-hclust(d.euclid2,method="ward.D")
+```
+
+##### **2.2 Graficar los 7 dendogramas**
+
+```{r, fig.height=5, warning=FALSE}
+#| label: fig-fig24
+#| fig-cap: Cuatro dendogramas jerárquicos con la distancia euclídea.
+
+f1 <- fviz_dend(Cl.single2, k = 3,        # k grupos (opcionales)
+          cex = 0.6,               # tamaño del texto de las ramas
+          ylab = "D.Euclidea",  # Rotulo de la distancia
+          main = "Vecino más Cercano - Single")  # Rotulo de título
+
+f2 <- fviz_dend(Cl.complete2, k = 3,        # k grupos (opcionales)
+          cex = 0.6,               # tamaño del texto de las ramas
+          ylab = "D.Euclidea",  # Rotulo de la distancia
+          main = "Vecino más Lejano - Complete")  # Rotulo de título
+
+# Continuación del código anterior:
+f3 <- fviz_dend(Cl.upgma2, k = 3,           # k grupos (opcionales)
+          cex = 0.6,                 # tamaño del texto de las ramas
+          ylab = "D.Euclidea",  # Rotulo de la distancia
+          main = "Unión Promedio no Ponderado - upgma")  # Título
+
+f4 <- fviz_dend(Cl.upgmc2, k = 3,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Unión Promedio Ponderado - upgmc") 
+
+grid.arrange(f1,f2,f3,f4, ncol = 1)
+```
+
+```{r, warning=FALSE, fig.height=5}
+#| label: fig-fig25
+#| fig-cap: Tres dendogramas jerárquicos restantes, con la distancia euclídea.
+
+f5 <- fviz_dend(Cl.wpgma2, k = 3,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Unión Centroide no Ponderado - wpgma") 
+
+f6 <- fviz_dend(Cl.wpgmc2, k = 3,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Unión Centroide Ponderado - wpgmc") 
+
+f7 <- fviz_dend(Cl.ward2, k = 3,          
+          cex = 0.6,                 
+          ylab = "D.Euclidea",  
+          main = "Método de Ward") 
+
+grid.arrange(f5,f6,f7, ncol = 1)
+```
+
+------------------------------------------------------------------------
+
+##### **2.3 Correlación cofenética**
+
+```{r}
+# (1) Correlación cofenpetica  para "single"
+cofenet1 <- cophenetic(Cl.single2)
+simple = cor(d.euclid2,cofenet1)
+simple
+```
+
+```{r}
+# (2) Correlación cofenética  para "complete"
+cofenet2<-cophenetic(Cl.complete2)
+compl = cor(d.euclid2,cofenet2)
+compl
+```
+
+```{r}
+# (3) Correlación cofenética  para "average"
+cofenet3<-cophenetic(Cl.upgma2)
+upgma = cor(d.euclid2,cofenet3)
+upgma
+```
+
+```{r}
+# (4) CCorrelación cofenética  para "mcquitty"
+cofenet4<-cophenetic(Cl.upgmc2)
+upgmc = cor(d.euclid2,cofenet4)
+upgmc
+```
+
+```{r}
+# (5) Correlación cofenética  para "centroid"
+cofenet5<-cophenetic(Cl.wpgma2)
+wpgma = cor(d.euclid2,cofenet5)
+wpgma
+```
+
+```{r}
+# (6) Correlación cofenética  para "median"
+cofenet6<-cophenetic(Cl.wpgmc2)
+wpgmc = cor(d.euclid2,cofenet6)
+wpgmc
+```
+
+```{r}
+# (7) Correlación cofenética  para "ward"
+cofenet7<-cophenetic(Cl.ward2)
+ward = cor(d.euclid2,cofenet7)
+ward
+```
+
+La @tbl-tbl10 muestra los valores de los cofenéticos, donde se observa que **wpgma** (0.967) fue el de mayor valor por lo tanto es el más óptimo para realizar el clúster
+
+```{r}
+#| label: tbl-tbl10
+#| tbl-cap: Valores de los cofenéticos para la realización del Cluster.
+
+# data frame con cofenéticos
+cofeneticos2 = data.frame(simple,compl,upgma,upgmc,
+                         wpgma,wpgmc,ward)
+
+# cofenéticos por cada métodos (Met)
+cofenet=data.frame(Met = 1:7,Cofen=t(round(cofeneticos2,3)))
+
+# tabla con orden descendente de cofenéticos
+cof_ordenado = cofenet[order(cofenet$Cofen, decreasing = TRUE), ]
+
+# Impresión de la tabla con los datos
+cof_ordenado %>%
+  kbl(caption = "", booktabs = F,longtable = T) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 3. Número de grupos formados**
+
+##### **Opción 1. Niveles de Fusión**
+
+En la @fig-fig26 muestra que la mayor amplitud se presenta en 3 k cluster, por lo cual, el dendograma se puede clasificar en dos grupos de observaciones.
+
+```{r}
+#| label: fig-fig26
+#| fig-cap: Tres regresiones entre la distancia euclídea empleada y las distancias cofenéticas de cada método de agrupamiento definido.
+
+# Data.frame con los datos de altura, k y número de cluster
+f2 <- data.frame(h = Cl.wpgma2$height, k = nrow(biol_cl):2, 
+                 cluster = nrow(biol_cl):2)
+
+# Crear el gráfico de dispersión y agregar etiquetas de texto
+ggplot(f2, aes(x = h, y = k, label = cluster)) +
+  geom_point(color = "grey") +
+  geom_text(color = "red", size = 3, vjust = -0.5) +
+  geom_step(color = "grey", direction = "vh") +
+
+# Personalizar el gráfico con títulos, etiquetas de ejes y 
+# paleta de colores
+  ggtitle("Niveles de Fusión - Distancia Euclídea - WPGMA") +
+  ylab("k (Número de Cluster)") +
+  xlab("h (Altura del Nodo)") +
+  scale_color_manual(values = c("grey", "red")) +
+  theme(axis.title = element_text(size = 16)) +
+  theme_classic()
+```
+
+------------------------------------------------------------------------
+
+##### **Opción 2. Amplitud de silueta (3 insumos requeridos)**
+
+```{r, warning=FALSE}
+# 1) Base de datos (biol)
+biol_cl <- read_excel("peces marinos méxico_biológicos.xlsx", col_names = TRUE)
+rownames(biol_cl) <- biol_cl$Sitios
+
+# 2) Distancia utilizada (d.euclid)
+d.euclid2 <- dist(biol_cl)
+
+# 3) Método de agrupamiento seleccionado (cl.wpgma)
+Cl.wpgma2<-hclust(d.euclid2,method="average")
+```
+
+```{r}
+# 1. Crear un vector vacío (amb.vacio) con asw valores
+biol.vacio <- numeric(nrow(biol_cl))
+
+# 2. Silueta "sil" 
+for(k in 3: (nrow(biol_cl)-1)){
+    sil <- silhouette(cutree(Cl.wpgma2,k=k),d.euclid2)
+    biol.vacio[k]<-summary(sil)$avg.width} 
+
+# 3. Mejor o mayor amplitud de silueta (2 particiones)
+k.mejor <- which.max(biol.vacio)
+k.mejor
+```
+
+------------------------------------------------------------------------
+
+La @fig-fig27 muestra que el valor máximo de la silueta es alcanzado con 3 clústeres, lo que indica que esta configuración proporciona la mejor separación entre grupos.
+
+```{r}
+#| label: fig-fig27
+#| fig-cap: Determinación del número optimo de Clústeres para datos biológicos
+
+# Grafica de silueta
+plot(1:nrow(biol_cl),biol.vacio,type="h",
+     main="Silueta-Número Óptimo de Clusters", xlab="(Número de grupos)",
+     ylab="Amplitud promedio de  silueta")
+     
+axis(1,k.mejor,paste("optimum",k.mejor,sep="\n"),col="red",
+     font=2,col.axis="red")
+     
+points(k.mejor,max(biol.vacio),pch=16,col="red",cex=1.5)
+```
+
+```{r}
+cat("","Silueta-Número óptimo de Clusters k=",k.mejor,
+    "\n","Con una aplitud promedio de silueta",max(biol.vacio),"\n")
+```
+
+------------------------------------------------------------------------
+
+#### **Figura del dendograma jerárquico final**
+
+La @fig-fig28 muestra tres grupos principales donde los sitios 35M, 31M y 21P conforman un grupo (color verde) que comparten especies similares que pueden estar asociadas a condiciones ambientales específicas. Luego tenemos un grupo conformado por el sitio 26M (azul) donde podemos apreciar que se distancia significativamente de los demás esto puede ser debido a singularidades del sitio. El resto de sitios (color rojo) presentan una distribución más homogénea, donde es posible considerar una región amplia con gradientes ambientales intermedios.
+
+```{r, warning=FALSE, message=FALSE}
+#| label: fig-fig28
+#| fig-cap: Agrupamiento jerárquico de sitios en función a las variables biológicas (WPGMA)
+
+# Dendograma final 
+fviz_dend(Cl.wpgma2, k = 3,    # k grupos
+          cex = 0.7,          # tamaño del texto de las observaciones
+          ylab = "Distancia Euclídea",  # Rotulo de la distancia
+          main = "Unión centroide no Ponderada (WPGMA)", # Título
+          lower_rect = 0,         # Inicio de los rectángulos en cero
+          k_colors = c("#00AFBB","#FC4E07",'#2ca25f'),
+          color_labels_by_k = TRUE,    # Colores para cada grupo
+          rect = TRUE)                 # Rectángulos de cada grupo
+```
+
+------------------------------------------------------------------------
+
+#### **Figura del dendograma no jerárquico final**
+
+```{r, warning=FALSE}
+biol_cl <- read_xlsx("datos_PCA.xlsx", sheet = "Hoja2")
+biol_cl <- biol_cl %>% 
+  dplyr::select(1, 40:51) 
+
+# Asignar los nombres de los sitios como rownames
+rownames(biol_cl) <- biol_cl$Sitios
+
+# Paso 1. Matriz de distancia 
+d.euclid2 <- dist(biol_cl)
+
+# Paso 2. Método de Agrupamiento seleccionado: UPGMA
+Cl.wpgma2<-hclust(d.euclid2,method="average") 
+```
+
+```{r}
+# Variable agrupadora con k=3 clúster
+grp <- cutree(Cl.wpgma2, k = 3)    # Grupos generados "grp"  
+grl <- levels(factor(grp))        # Rotulos de los grupos formados 
+```
+
+```{r}
+# Incluir la variable agrupadora en la base de datos
+datos.1=data.frame(grp,biol_cl[,1],biol_cl)       # Nuevo dataframe con la variable agrupadora (gr)
+head (datos.1) %>% 
+  kbl(caption = "", booktabs = F,longtable = T) %>%
+  kable_classic(full_width = F, html_font = "Cambria")
+```
+
+```{r, warning=FALSE}
+#| label: fig-fig29
+#| fig-cap: Agrupamiento no jerárquico de sitios en función a las variables ambientales (UPGMA).
+
+fviz_cluster(list(data = datos.1[,c(-1, -2, -3)], cluster = grp),
+             palette = c("#FC4E07","#00AFBB",'#2ca25f'),  # Colores para cada grupo
+             ellipse.type = "confidence",        # Elipses
+             repel = TRUE,                 # Elimina solapamiento de observaciones
+             show.clust.cent = FALSE,      # Muestra a los clúster centrados
+             ggtheme = theme_bw())     # Tipo de fondo tomado de ggplot2
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 4. Variables de mayor contrinución a la clasificación**
+
+##### **Mapas de calor (opción 1)**
+
+```{r, warning=FALSE}
+# Seleccionar columnas específicas
+biol_cl1 <- d_elipses[, c(1, 40:51)]
+
+# Asignar los nombres de los sitios como rownames
+rownames(biol_cl1) <- biol_cl1$Sitios
+biol_cl1 <- biol_cl1[, -1]
+
+# Convertir a matriz
+biol_cl1 <- as.matrix(biol_cl1)
+```
+
+La @fig-fig30 muestra que las especies *Poecilia mexicana, Gambussia regani* y *Astyanax mexicanus* son las que más contribuyen a la diferenciación entre sitios. Por el contrario, especies como *Gambussia sp. y Aplodinotus grunniens* presentan menor variabilidad entre sitios, reflejando una influencia secundaria en la clasificación
+
+```{r, fig.height=9}
+#| label: fig-fig30
+#| fig-cap: Mapa de calor que define a las variables biológicas de mayor aporte a la clasificación realizada.
+
+# Opción 1. Mapa de calor con paquete "stats"
+hv <- heatmap(biol_cl1, margins=c(10,8), 
+              distfun = dist,
+              xlab ="Variables biológicas",
+              ylab= "Sitios", 
+              main = "Clasificación de Sitios",
+              scale = "row")   # Estandariza variables diferentes.
+```
+
+------------------------------------------------------------------------
+
+##### **Mapas de calor (opción 2)**
+
+```{r, fig.height=8.4}
+# Opción 2. Mapa de calor con paquete "gclust"
+
+# Opción 2. Mapa de calor con paquete "stats"
+hclust.fq <- function(biol_cl1) hclust(biol_cl1, method="average")   # Inserción de agrupación UPGMA
+
+heatmap.2(biol_cl1,               # Base de datos en formato matricial
+          margins=c(7,7),     # Margenes de la figura
+          scale = "row",      # Estandariza variables diferentes.
+          col = bluered(100),                 # Colores del mapa de calor
+          xlab ="Variables Ambientales",
+          ylab= "Sitios", 
+          main = "Clasificación de Sitios",
+          trace = "none", 
+          density.info = "none",
+          distfun = dist,          # Se puede usar vegdist de "vegan" 
+          hclustfun=hclust.fq)     # Agrupamiento UPGMA
+```
+
+------------------------------------------------------------------------
+
+##### **Mapas de calor (opción 3)**
+
+```{r, warning=FALSE}
+# Mapas de calor (opción 3)
+# Extracción de los promedios de las variables para cada sitio
+library(tidyverse)
+promedios_b <- 
+  d_elipses %>%      
+  dplyr::select(Sitios, `Pclm`, `Drsp`, `Nagñ`, `Mxsc`, `Astm`, `Gmbsaf`, `Gmbr`, `Gsp`, `Pclf`, `Msp`, `Aplg`, `Hrcc`) %>%
+  na.omit() %>%
+  group_by(Sitios) %>%
+  summarise(across(everything(), mean, na.rm = TRUE))
+  
+promedios_b  <- data.frame(promedios_b) # Guardar promedios como dataframe
+# promedios
+```
+
+```{r}
+# Seleccionar columnas de 2 a 10 del data frame peces1 y convertirlas en matriz
+promedios_b2 <- promedios_b %>% 
+              subset(select = c(2:13)) %>% 
+              as.matrix()
+head (promedios_b2[,1:12]) # Visualización de las 10 primeras variables
+```
+
+```{r}
+# Asignar los valores de la primera columna de promedios[,1] 
+# como nombres de fila en la matriz promedios2
+rownames(promedios_b2) <- promedios_b$Sitios
+```
+
+```{r, fig.height=7.5}
+# Figura del primer mapa de calor
+hv <- heatmap(promedios_b2, 
+              margins = c(5,12), 
+              distfun = dist,
+              xlab ="Variables Biológicas", 
+              ylab= "Grupos de Sitios", 
+              main = "Clasificación de Sitios")
+```
+
+------------------------------------------------------------------------
+
+##### Mapa con paquete "ggplots"
+
+```{r}
+# Opción 2. Mapa de calor con paquete "gplots"
+hclust.fq <- function(promedios_b2) 
+             hclust(promedios_b2, method="centroid")   # Inserción de WPGMA
+```
+
+```{r, fig.height=8}
+library("gplots")
+heatmap.2(promedios_b2,         # Base de datos en formato matricial
+          margins=c(5,12),    # Margenes de la figura
+          scale = "row",      # Estandariza variables diferentes.
+          col = bluered(100),                 # Colores del mapa de calor
+          xlab ="Variables Ambientales", 
+          ylab= "Grupos de Sitios", 
+          main = "Clasificación de Sitios",   
+          trace = "none", 
+          density.info = "none",
+          distfun = dist,          # Se puede usar vegdist de "vegan" 
+          hclustfun=hclust.fq)     # Agrupamiento UPGMA
+```
+
+------------------------------------------------------------------------
+
+## Análisis discriminante lineal (lda)
+
+### LDA con datos biológicos
+
+```{r}
+d_elipses <- read_xlsx("datos_PCA.xlsx", sheet = "Hoja2")
+```
+
+```{r}
+d_elipses <- d_elipses %>% 
+  mutate(Zona = case_when(
+    Alt2 <= 10  ~ "Baja",
+    Alt2 >= 11  & Alt2 < 199 ~ "Medio",
+    Alt2 > 200  ~ "Alto"
+  ))
+```
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(123)
+biol_lda <- d_elipses[, c(53,40:51)]
+
+muestra.entrenamiento <- 
+  biol_lda$Zona %>%
+  createDataPartition(p = 0.8, list = FALSE)
+
+entrenamiento <- biol_lda[muestra.entrenamiento, ]
+prueba <- biol_lda[-muestra.entrenamiento, ] 
+```
+
+```{r}
+preprocesamiento <- 
+  entrenamiento %>% 
+  preProcess(method = c("center", "scale"))
+
+# Transformar los datos usando los parámetros estimados.
+entrenam.transf <- 
+  preprocesamiento %>% 
+  predict(entrenamiento)
+
+prueba.transf <- 
+  preprocesamiento %>% 
+  predict(prueba)
+```
+
+```{r}
+# 1. datos de altitud baja
+Bajo   <- entrenam.transf %>% 
+             filter(Zona == "Alto") %>%       
+             subset(select = c("Pclm", "Drsp", "Nagñ", "Mxsc", "Astm", "Gmbsaf", "Gmbr", "Gsp", "Pclf", "Msp", "Aplg", "Hrcc")) %>%              
+                               as.matrix()
+
+# 2. datos de altitud media
+Medio  <- entrenam.transf %>% 
+             filter(Zona == "Medio") %>%       
+             subset(select = c("Pclm", "Drsp", "Nagñ", "Mxsc", "Astm", "Gmbsaf", "Gmbr", "Gsp", "Pclf", "Msp", "Aplg", "Hrcc")) %>%              
+             as.matrix() 
+
+# 3. datos de zona de altitud alta
+Alto <- entrenam.transf %>% 
+             filter(Zona == "Baja") %>%       
+             subset(select = c("Pclm", "Drsp", "Nagñ", "Mxsc", "Astm", "Gmbsaf", "Gmbr", "Gsp", "Pclf", "Msp", "Aplg", "Hrcc")) %>%              
+                               as.matrix()
+```
+
+------------------------------------------------------------------------
+
+#### Paso 1. Prueba de supuestos
+
+##### 1.1. Supuesto Normalidad
+
+Los supuestos de normalidad para la matriz de las variables agrupadores no se lograron obtener debido a que la matriz de estas son singulares, lo cual impide la realización de la prueba.
+
+```{r}
+library(mvnormtest)
+#norm1 <- mshapiro.test(t(Purificacion))   # Matriz singular
+#norm2   <- mshapiro.test(t(San_Carlos))   # Matriz singular
+#norm3 <- mshapiro.test(t(San_Marcos))     # Matriz singular
+#norm4   <- mshapiro.test(t(Santa_Ana))    # Matriz singular
+#norm5   <- mshapiro.test(t(Soto_la_Marina))# Matriz singular
+#norm6   <- mshapiro.test(t(Arroyo_Grande)) # Matriz singular
+#norm7   <- mshapiro.test(t(Corona))       # Matriz singular
+#norm8   <- mshapiro.test(t(Pilon))        # Matriz singular
+```
+
+```{r}
+### **Supuesto 2. Homogeneidad de covarianzas (esfericidad)**)
+library(vegan)
+# Pruebas de Homogeneidad de covarianzas paquete "vegan"
+biol.d <- dist(entrenam.transf[, 2:13])   # Matriz de distancias
+biol.homoge <- betadisper(biol.d, entrenam.transf$Zona) # Permutest
+```
+
+Se cumple el supuesto de homogeneidad de covarianzas (F value 1.31; gl 2 y 32; p= 0.28).
+
+```{r}
+# 1) Prueba con anova permutacional
+anova(biol.homoge)
+```
+
+La prueba permutacional, al igual que el anova, nos indican la homogeneidad de covarianza.
+
+```{r}
+# 2) Prueba permutacional
+permutest(biol.homoge)   
+#se cumple el supuesto de homogeneidad 
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 2. Análisis discriminante lineal de Fisher**
+
+Se puede observar que las zonas de altitud no se estan discriminando de forma adecuada debido a que los valores no son cercanos a 1, por lo que tienen similitudes. En el sitio bajo, se observa valores muy bajos, por lo que presenta altas similitudes con los otros sitios.
+
+```{r}
+# 1) Modelo Discriminante Lineal (lda)
+dis<- lda(Zona ~ Pclm + Drsp + Nagñ + Mxsc + Astm + Gmbsaf + Gmbr + Gsp + Pclf + Msp + Aplg + Hrcc, data = entrenam.transf)
+round(dis$prior,2)
+```
+
+```{r}
+# Grupos de medias para las 10 variables
+round(dis$means,2)
+```
+
+```{r}
+#coordenadas de las vairbles 
+# observaciones en cada eje canónico
+round((Cs <- dis$scaling),2)[,1:2]
+head (Cs) %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+```{r}
+# Coordenadas de las seis primeras 
+# observaciones en cada eje canónico
+round(head(Fp <- predict(dis)$x),2)[,1:2]
+```
+
+Se puede observar que el sitio que mejor discriminacion tuvo fue Alta, debido a que no comparte valores con otros sitios, caso contrario de medio y bajo, los cuales presentaron valores en Alta, por lo que hay similitudes entres estas.
+
+```{r}
+# Evaluación de desempeño del AD (método 1)
+attach(entrenam.transf)
+group<-predict(dis,method="plug-in")$class
+(tabla<-table(Zona,group))
+
+tabla %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+Al observar el porcentaje de clasificación se puede apreciar que como anteriormente mencionamos, la zona Alta tuvo un buen porcentaje de clasifiación, caso contrario de los otros dos sitios que no presentaron una buena discriminación.
+
+```{r}
+# Porcentaje de clasificación correcta 
+round(diag(prop.table(tabla, 1)),2)*100
+```
+
+```{r}
+# Calcular la tabla de proporciones por fila
+tabla_prop <- prop.table(tabla, 1)
+
+# Mostrar el porcentaje de clasificación correcta por clase
+round(diag(tabla_prop), 2) * 100
+
+# Redondear toda la tabla a dos decimales y mostrarla con formato
+round(tabla_prop, 2) %>%
+  kbl() %>%
+  kable_classic(full_width = FALSE)
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 3. Visualización grafica del LDA**
+
+```{r}
+# 1) Coordenadas de los sitios y el factor (coord.sit)
+
+# Coordenadas de los sitios
+Fp <- predict(dis)$x
+# Grupos 
+group<-predict(dis,method="plug-in")$class
+
+# Dataframe
+coord.sit <- as.data.frame(predict(dis)$x[,1:2])     # Coordenadas de los sitios
+coord.sit$sitio <- rownames(coord.sit)               # Crear una columna con nombres de los sitios
+coord.sit$grp <- group                               # Adicionar columna de grupos por Tributario
+head(coord.sit) 
+```
+
+```{r}
+# 2) Coordenadasde las variables (coord.var) 
+coord.var <- as.data.frame(round((Cs <- dis$scaling),2)[,1:2])    # Dos primeros ejes
+variables <- rownames(coord.var)
+coord.var <- cbind(coord.var, variables = variables)
+head(coord.var)
+```
+
+La @fig-fig31 muestra una diferenciación entre las zonas de altitud media y alta en el eje 1 con una parte que se traslapa entre estos dos, tambien se puede observar especies asociados a los grupos tanto por su tamaño como por su direccion, siendo Astm, Nagñ, Mxsc y Pclf asociados a las zonas altas, mientras que las especies asociadas a zonas medias tambien ayudaron a diferenciar al grupo alto, compartiendo especies como Gsp y Gmbsaf.
+
+```{r, warning=FALSE, message=FALSE, fig.height=6}
+#| label: fig-fig31
+#| fig-cap: LDA de zonas altitudinales con variables biologicas
+
+# 1) Figura con vectores de variables biologicas
+ggplot() +
+  
+  # Sitios
+  geom_text_repel(data = coord.sit,aes(LD1,LD2,label=row.names(coord.sit)),
+                  size=4)+   # Muestra el cuadro de la figura
+  geom_point(data = coord.sit,aes(LD1,LD2,colour=grp),size=4)+
+  scale_shape_manual(values = c(21:25))+
+  
+  # Variables morfométricas  
+  geom_segment(data = coord.var,aes(x = 0, y = 0, xend = LD1*2, yend = LD2*2), 
+               arrow = arrow(angle=22.5,length = unit(0.25,"cm"),
+               type = "closed"),linetype=1, size=0.6,colour = "red")+
+  geom_text_repel(data = coord.var,aes(LD1*2,LD2*2,label=variables),colour = "red")+
+  
+  # Grupos (Especies de peces)
+  geom_mark_ellipse(data=coord.sit,aes(x=LD1,y=LD2,fill=grp),alpha=0.30) +
+  
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL))+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+```
+
+------------------------------------------------------------------------
+
+### LDA con datos ambientales
+
+```{r}
+set.seed(123)
+amb_lda <- d_elipses[, c(53,4:8, 25:39)]
+
+muestra.entrenamiento2 <- 
+  amb_lda$Zona %>%
+  createDataPartition(p = 0.8, list = FALSE)
+
+entrenamiento2 <- amb_lda[muestra.entrenamiento2, ]
+prueba2 <- amb_lda[-muestra.entrenamiento2, ] 
+```
+
+```{r}
+preprocesamiento2 <- 
+  entrenamiento2 %>% 
+  preProcess(method = c("center", "scale"))
+
+# Transformar los datos usando los parámetros estimados.
+entrenam.transf2 <- 
+  preprocesamiento2 %>% 
+  predict(entrenamiento2)
+
+prueba.transf2 <- 
+  preprocesamiento2 %>% 
+  predict(prueba2)
+```
+
+```{r}
+# 1. datos de Arroyo grande
+Bajo2   <- entrenam.transf2 %>% 
+             filter(Zona == "Alto") %>%       
+             subset(select = c( "Artm", "Wrtrt", "Adotsa", "Mxmd", "Wotws", "Typs", "Alt2", "pH", "Cndc", "Slnt", "Trns", "Oxyg", "CrbD", "Alkl", "NO2", "NO3", "Ammn", "Hrdn", "Phsp", "TDS"
+
+)) %>%              
+                               as.matrix()
+
+
+# 2. datos de Corona
+Medio2  <- entrenam.transf2 %>% 
+             filter(Zona == "Medio") %>%       
+             subset(select = c( "Artm", "Wrtrt", "Adotsa", "Mxmd", "Wotws", "Typs", "Alt2", "pH", "Cndc", "Slnt", "Trns", "Oxyg", "CrbD", "Alkl", "NO2", "NO3", "Ammn", "Hrdn", "Phsp", "TDS"
+)) %>%              
+             as.matrix() 
+
+# 3. datos de Palmas
+Alto2 <- entrenam.transf2 %>% 
+             filter(Zona == "Alto") %>%       
+             subset(select = c( "Artm",  "Wrtrt", "Adotsa", "Mxmd", "Wotws", "Typs", "Alt2", "pH", "Cndc", "Slnt", "Trns", "Oxyg", "CrbD", "Alkl", "NO2", "NO3", "Ammn", "Hrdn", "Phsp", "TDS")) %>%              
+                               as.matrix()
+```
+
+#### Paso 1. Prueba de supuestos
+
+##### 1.1. Supuesto Normalidad
+
+```{r}
+library(mvnormtest)
+
+#normb1 <- mshapiro.test(t(Purificacion2))   # Matriz singular
+#normb2   <- mshapiro.test(t(San_Carlos2))   # Matriz singular
+#normb3 <- mshapiro.test(t(San_Marcos2))     # Matriz singular
+#normb4   <- mshapiro.test(t(Santa_Ana2))    # Matriz singular
+#normb5   <- mshapiro.test(t(Soto_la_Marina2))# Matriz singular
+#normb6   <- mshapiro.test(t(Arroyo_Grande2)) # Matriz singular
+#normb7   <- mshapiro.test(t(Corona2))       # Matriz singular
+#normb8   <- mshapiro.test(t(Pilon2))        # Matriz singular
+```
+
+```{r}
+### **Supuesto 2. Homogeneidad de covarianzas (esfericidad)**)
+library(vegan)
+# Pruebas de Homogeneidad de covarianzas paquete "vegan"
+biol.d2 <- dist(entrenam.transf2[, 2:21])   # Matriz de distancias
+biol.homoge2 <- betadisper(biol.d2, entrenam.transf2$Zona) # Permutest
+```
+
+Los datos no cumplieron el supuesto homogeneidad.
+
+```{r}
+# 1) Prueba con anova permutacional
+anova(biol.homoge2) 
+```
+
+Al hacer el permutest nos indica lo mismo que los datos no cumplen el supuesto de homogeneidad. Por lo anterior no es recomentable realiazar la prueba con los datos ambientales.
+
+```{r}
+# 2) Prueba permutacional
+permutest(biol.homoge2) 
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 2. Análisis discriminante lineal de Fisher**
+
+Los datos ambientales no se discrimaron de forma correcta, por lo que hay similitud entre sitios.
+
+```{r}
+# 1) Modelo Discriminante Lineal (lda)
+dis2<- lda( Zona ~ Wrtrt  + Artm + Adotsa + Mxmd + Wotws + Typs + Alt2 + pH + Cndc + Slnt + Trns + Oxyg + CrbD + Alkl + NO2 + NO3 + Ammn + Hrdn + Phsp + TDS, data = entrenam.transf2)
+round(dis2$prior,2)
+```
+
+```{r}
+# Grupos de medias para las 10 variables
+round(dis2$means,2)
+
+# Redondeas y luego lo pasas a tabla:
+round(dis2$means, 2) %>%
+  kbl() %>%
+  kable_classic(full_width = FALSE)
+```
+
+```{r}
+#coordenadas de las vairbles 
+# observaciones en cada eje canónico
+round((Cs <- dis2$scaling),2)[,1:2]
+head (Cs) %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+```{r}
+# Coordenadas de las seis primeras 
+# observaciones en cada eje canónico
+round(head(Fp2 <- predict(dis2)$x),2)[,1:2]
+```
+
+Al observar el desempleño se puede observar que las variables ambientales en la zona alta, media y baja se discriminaron de forma apropiada, lo que nos indican que hay diferencias entre estos grupos.
+
+```{r}
+# Evaluación de desempeño del AD (método 1)
+attach(entrenam.transf2)
+group2<-predict(dis2,method="plug-in")$class
+(tabla2<-table(Zona,group2))
+
+tabla2 %>% 
+  kbl() %>% 
+  kable_classic(full_width=F)
+```
+
+El porcentaje de clasificación para cada zona fue apropiado, obtiendo una discriminación de las variable en cada una de estas zonas.
+
+```{r}
+# Porcentaje de clasificación correcta 
+round(diag(prop.table(tabla2, 1)),2)*100
+```
+
+```{r}
+# Calcular la tabla de proporciones por fila
+tabla_prop2 <- prop.table(tabla2, 1)
+
+# Mostrar el porcentaje de clasificación correcta por clase
+round(diag(tabla_prop2), 2) * 100
+
+# Redondear toda la tabla a dos decimales y mostrarla con formato
+round(tabla_prop2, 2) %>%
+  kbl() %>%
+  kable_classic(full_width = FALSE)
+```
+
+------------------------------------------------------------------------
+
+#### **Paso 3. Visualización grafica del LDA**
+
+```{r}
+# 1) Coordenadas de los sitios y el factor (coord.sit)
+
+# Coordenadas de los sitios
+Fp2 <- predict(dis2)$x
+# Grupos 
+group2<-predict(dis2,method="plug-in")$class
+
+# Dataframe
+coord.sit2 <- as.data.frame(predict(dis2)$x[,1:2])     # Coordenadas de los sitios
+coord.sit2$Zona <- rownames(coord.sit2)               # Crear una columna con nombres de los sitios
+coord.sit2$grp <- group2                               # Adicionar columna de grupos por Tributario
+head(coord.sit2)  
+```
+
+```{r}
+# 2) Coordenadasde las variables (coord.var) 
+coord.var2 <- as.data.frame(round((Cs <- dis2$scaling),2)[,1:2])    # Dos primeros ejes
+variables2 <- rownames(coord.var2)
+coord.var2 <- cbind(coord.var2, variables2 = variables2)
+head(coord.var2)
+```
+
+La @fig-fig32 muestra una superposicion entre la zona alta y media en sus variables ambientales, donde la zona baja se diferencio de estás dos zonas anteriores con variables asociadas como la salinidad adotsa. Por otro lado, se observo similitud en las variables ambientales, donde varibales como adotsa, y amonio se diferenciaron de total de solidos disueltos, alcalinidad y oxigeno.
+
+```{r, warning=FALSE, message=FALSE, fig.height=6}
+#| label: fig-fig32
+#| fig-cap: LDA de zonas altitudinales con variables ambientales
+
+# 1) Figura con vectores de variables ambientales
+ggplot() +
+  
+  # Sitios
+  geom_text_repel(data = coord.sit2,aes(LD1,LD2,label=row.names(coord.sit2)),
+                  size=4)+   # Muestra el cuadro de la figura
+  geom_point(data = coord.sit2,aes(LD1,LD2,colour=grp),size=4)+
+  scale_shape_manual(values = c(21:25))+
+  
+  # Variables morfométricas  
+  geom_segment(data = coord.var2,aes(x = 0, y = 0, xend = LD1*2, yend = LD2*2), 
+               arrow = arrow(angle=22.5,length = unit(0.25,"cm"),
+               type = "closed"),linetype=1, size=0.6,colour = "red")+
+  geom_text_repel(data = coord.var2,aes(LD1*2,LD2*2,label=variables2),colour = "red")+
+  
+  # Grupos (Especies de peces)
+  geom_mark_ellipse(data=coord.sit2,aes(x=LD1,y=LD2,fill=grp),alpha=0.30) +
+  
+  geom_hline(yintercept=0,linetype=3,size=1) + 
+  geom_vline(xintercept=0,linetype=3,size=1)+
+  guides(shape=guide_legend(title=NULL,color="black"),
+         fill=guide_legend(title=NULL))+
+  theme_bw()+
+  theme(panel.grid=element_blank())
+```
+
+------------------------------------------------------------------------
+
+## Análisis discriminante canónico (dca)
+
+### Datos Biologicos
+
+```{r}
+entrenam.transf$Zona <- as.factor(entrenam.transf$Zona)
+```
+
+```{r, warning=FALSE, message=FALSE}
+attach(entrenam.transf)
+names(entrenam.transf)
+```
+
+```{r}
+# Modelo Lineal multivariado
+mod <- lm(cbind(Pclm, Drsp, Nagñ, Mxsc, Astm, Gmbsaf, Gmbr, Gsp, Pclf, Msp, Aplg, Hrcc) ~ Zona,entrenam.transf)
+```
+
+```{r}
+# Análisis discriminante canónico - ADC
+library(candisc)
+can <- candisc(mod, term= "Zona",data=entrenam.transf,ndim=1)
+```
+
+La @fig-fig33 nos presenta el primer eje canónico (Can1), que explica el 90.3% de la variación entre los grupos, muestra una clara diferenciación entre la zona alta y media donde la zona alta se ve mayormente influenciada por especies como Nagñ, Astm y Hrcc. Por otra parte la zona media fue en mayor medida influenciada por la especie Gmbsaf seguida de Gsp y finalmente por Drsp.
+
+```{r, fig.height=7}
+#| label: fig-fig33
+#| fig-cap: Distribución de las especies de peces en las dististas zonas altitudinales. 
+
+
+
+plot(can,titles.1d = c("Puntuación canónica", "Estructura"), cex.main = 1.6,    # Títulos grandes
+   cex.lab = 1.4,     # Etiquetas de ejes
+     cex.axis = 1.1)    # Texto del eje X e Y 
+```
+
+------------------------------------------------------------------------
+
+### Datos Ambientales
+
+```{r}
+entrenam.transf2$Zona <- as.factor(entrenam.transf2$Zona)
+```
+
+```{r, warning=FALSE, message=FALSE}
+attach(entrenam.transf2)
+names(entrenam.transf2)
+```
+
+```{r}
+# Modelo Lineal multivariado
+mod2 <- lm(cbind(Wrtrt, Artm, Adotsa, Mxmd, Wotws, Typs, Alt2, pH, Cndc, Slnt, Trns, Oxyg, CrbD, Alkl, NO2, NO3, Ammn, Hrdn, Phsp, TDS) ~ Zona,entrenam.transf2)
+```
+
+```{r}
+# Análisis discriminante canónico - ADC
+
+can2 <- candisc(mod2, term= "Zona",data=entrenam.transf2,ndim=1)
+```
+
+La @fig-fig34 nos presenta el primer eje canónico (Can1), que explica el 99.4% de la variación entre los grupos. Muestra que la zona baja tiene valores muy negativos lo que indica una marcada diferencia respecto a las demás zonas. Esta separación está influenciada por variables como Slnt, Wotws y Adotsa. Por otra parte variables como Alt2, CrbD y Alkl se asocian positivamente con Can1 y caracterizan las zonas Alta y Media. Esto sugiere que la calidad ecológica varía considerablemente entre zonas y que las condiciones físico-químicas son claves para explicar dicha diferenciación.
+
+```{r, fig.height=9.5}
+#| label: fig-fig34
+#| fig-cap: Distribución de las variables ambientales en las dististas zonas altitudinales 
+
+
+
+plot(can2,titles.1d = c("Puntuación canónica", "Estructura"), cex.main = 1.6,    # Títulos grandes
+   cex.lab = 1.4,     # Etiquetas de ejes
+     cex.axis = 1.1)    # Texto del eje X e Y 
+```
+
+------------------------------------------------------------------------
+
+## MANOVA
+
+### Datos biológicos
+
+```{r, message=FALSE, warning=FALSE}
+# Manova 
+attach(entrenam.transf)
+biol.manova<-manova(cbind(Pclm, Drsp, Nagñ, Mxsc, Astm, Gmbsaf, Gmbr, Gsp, Pclf, Msp, Aplg, Hrcc) ~ Zona)
+
+```
+
+Ninguna de las variables presenta un efecto significativo para diferenciar los grupos en comparación (Zonas). Puesto que todos los p.valor son mayores a 0.05.
+
+```{r}
+# respuesta de la variable Plcm
+summary.aov(biol.manova)$" Response Plcm"
+# respuesta de la variable Drsp
+summary.aov(biol.manova)$" Response Drsp"
+# respuesta de la variable Nagñ
+summary.aov(biol.manova)$" Response Nagñ"
+# respuesta de la variable Mxsc
+summary.aov(biol.manova)$" Response Mxsc"
+# respuesta de la variable Astm
+summary.aov(biol.manova)$" Response Astm"
+# respuesta de la variable Gmbsaf
+summary.aov(biol.manova)$" Response Gmbsaf"
+# respuesta de la variable Gmbr
+summary.aov(biol.manova)$" Response Gmbr"
+# respuesta de la variable Gsp
+summary.aov(biol.manova)$" Response Gsp"
+# respuesta de la variable Pclf
+summary.aov(biol.manova)$" Response Pclf"
+# respuesta de la variable Msp
+summary.aov(biol.manova)$" Response Msp"
+# respuesta de la variable Aplg
+summary.aov(biol.manova)$" Response Aplg"
+# respuesta de la variable Hrcc
+summary.aov(biol.manova)$" Response Hrcc"
+```
+
+##### **1.2** Cuatro tipos de MANOVA
+
+En este caso tomaríamos el tests de Pillai puesto que los datos no presentan homogeneidad de covarianzas, sin embargo tampoco es significativo. Y se acepta la hipótesis nula.
+
+```{r}
+# Tipos de MANOVA para las diferencias en los promedios de cada Zona 
+summary(biol.manova,test="Pillai")
+# MANOVA 2
+summary(biol.manova,test="Wilks")
+# MANOVA 3
+summary(biol.manova,test="Hotelling")
+# MANOVA 4
+summary(biol.manova,test="Roy")
+```
+
+##### 2.1. Supuesto de normalidad de los residuales del MANOVA
+
+No se cumple el supuesto de normalidad
+
+```{r}
+# 1) Prueba de multinormalidad de los residuales del manova (mshapiro.test)
+library(mvnormtest)
+x <- as.matrix(t(residuals(biol.manova)))
+mshapiro.test(x)
+```
+
+```{r}
+# 2. Figura de multinormalidad
+# Funciones para la figura
+source("funciones.r") #codigo que debe estar en la carpeta
+```
+
+```{r}
+# Grafica QQ-PLot para visualizar la normalidad
+x <- as.matrix(residuals(biol.manova)) 
+# centroide
+center <- colMeans(x) 
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) 
+```
+
+La figura 3 muestra una gran dispersión de los puntos, alejandose de la curva roja lo que nos sugiere que los datos no siguen una distribución normal.
+
+```{r}
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="Normalidad multivariada",
+       ylab="Cuantil Chi-Cuadrado", xlab= "Distancia Mahalanobish")
+abline(a=0,b=1,col=2) 
+```
+
+##### 2.2. Supuesto de independencia
+
+```{r, message=FALSE, warning=FALSE}
+# Prueba de Independencia - Estadistico Durbin Watson
+attach(entrenam.transf)
+modelo<-lm(Pclm+Drsp+Nagñ+Mxsc+Astm+Gmbsaf+Gmbr+Gsp+Pclf+Msp+Aplg+Hrcc~Zona)
+durbinWatsonTest(modelo)
+```
+
+Si es independiente.
+
+#### Datos ambientales
+
+```{r, message=FALSE, warning=FALSE}
+# Manova 
+attach(entrenam.transf2)
+amb.manova<-manova(cbind(Wrtrt, Artm, Adotsa, Mxmd, Wotws, Typs, Alt2, pH, Cndc, Slnt, Trns, Oxyg, CrbD, Alkl, NO2, NO3, Ammn, Hrdn, Phsp, TDS) ~ Zona)
+
+```
+
+Las variables que presentan un efecto significativo son: Adotsa, Mxmd, Wotws, Alt2, Cndc, Slnt y TDS.
+
+```{r}
+# respuesta de la variable Wrtrt
+summary.aov(amb.manova)$" Response Wrtrt"
+# respuesta de la variable Artm
+summary.aov(amb.manova)$" Response Artm"
+# respuesta de la variable Adotsa
+summary.aov(amb.manova)$" Response Adotsa" 
+# respuesta de la variable Mxmd
+summary.aov(amb.manova)$" Response Mxmd" 
+# respuesta de la variable Wotws
+summary.aov(amb.manova)$" Response Wotws"
+# respuesta de la variable Typs
+summary.aov(amb.manova)$" Response Typs"
+# respuesta de la variable Alt2
+summary.aov(amb.manova)$" Response Alt2"
+# respuesta de la variable pH
+summary.aov(amb.manova)$" Response pH"
+# respuesta de la variable Cndc
+summary.aov(amb.manova)$" Response Cndc"
+# respuesta de la variable Slnt
+summary.aov(amb.manova)$" Response Slnt"
+# respuesta de la variable Trns
+summary.aov(amb.manova)$" Response Trns"
+# respuesta de la variable Oxyg
+summary.aov(amb.manova)$" Response Oxyg"
+# respuesta de la variable CrbD
+summary.aov(amb.manova)$" Response CrbD"
+# respuesta de la variable Alkl
+summary.aov(amb.manova)$" Response Alkl"
+# respuesta de la variable NO2
+summary.aov(amb.manova)$" Response NO2"
+# respuesta de la variable NO3
+summary.aov(amb.manova)$" Response NO3"
+# respuesta de la variable Ammn
+summary.aov(amb.manova)$" Response Ammn"
+# respuesta de la variable Hrdn
+summary.aov(amb.manova)$" Response Hrdn"
+# respuesta de la variable Phsp
+summary.aov(amb.manova)$" Response Phsp"
+# respuesta de la variable TDS
+summary.aov(amb.manova)$" Response TDS"
+```
+
+##### **1.2** Cuatro tipos de MANOVA
+
+En este caso sí se presenta homogeneidad de covarianza y los cuatro manovas nos dan valores p menores a 0,05 por lo que se rechaza la hipótesis nula.
+
+```{r}
+# Tipos de MANOVA para las diferencias en los promedios de cada Zona 
+summary(amb.manova,test="Pillai")
+# MANOVA 2
+summary(amb.manova,test="Wilks")
+# MANOVA 3
+summary(amb.manova,test="Hotelling")
+# MANOVA 4
+summary(amb.manova,test="Roy")
+```
+
+##### 2.1. Supuesto de normalidad de los residuales del MANOVA
+
+```{r}
+# 1) Prueba de multinormalidad de los residuales del manova (mshapiro.test)
+library(mvnormtest)
+x <- as.matrix(t(residuals(amb.manova)))
+mshapiro.test(x)
+```
+
+No se cumple supuesto de normalidad
+
+```{r}
+# 2. Figura de multinormalidad
+# Funciones para la figura
+source("funciones.r") #codigo que debe estar en la carpeta
+```
+
+```{r}
+# Grafica QQ-PLot para visualizar la normalidad
+x <- as.matrix(residuals(amb.manova)) 
+# centroide
+center <- colMeans(x) 
+n <- nrow(x); p <- ncol(x); cov <- cov(x); 
+d <- mahalanobis(x,center,cov) 
+```
+
+La figura 4 muestra una desviacion considerable de los puntos de la lineaa roja, alejandose de la curva roja lo que nos sugiere que los datos no siguen una distribución normal.
+
+```{r}
+qqplot(qchisq(ppoints(n),df=p),d,
+       main="Normalidad multivariada",
+       ylab="Cuantil Chi-Cuadrado", xlab= "Distancia Mahalanobish")
+abline(a=0,b=1,col=2) 
+
+```
+
+##### 2.2. Supuesto de independencia
+
+```{r, message=FALSE, warning=FALSE}
+# Prueba de Independencia - Estadistico Durbin Watson
+attach(entrenam.transf2)
+modelo<-lm(Wrtrt+Artm+Adotsa+Mxmd+Wotws+Typs+Alt2+pH+Cndc+Slnt+Trns+Oxyg+CrbD+Alkl+NO2+NO3+Ammn+Hrdn+Phsp+TDS~Zona)
+durbinWatsonTest(modelo)
+```
+
+Si es independiente
+
+------------------------------------------------------------------------
+
+## PERMANOVA
+
+```{r}
+#leer la base de datos
+datosper <- read_xlsx("datos_permanova.xlsx")
+```
+
+```{r}
+#variable agrupadora
+datosper <- datosper %>% 
+  mutate(Zona = case_when(
+    Alt2 <= 10  ~ "Baja",
+    Alt2 >= 11  & Alt2 < 199 ~ "Medio",
+    Alt2 > 200  ~ "Alto"
+  ))
+datosper <- datosper %>% relocate(Zona, .after = 1)
+```
+
+```{r}
+#distancia euclidea
+biol.dist<-dist(datosper[,c(3:91)],"euclid")
+```
+
+Al realizar el ANOSIM, los valores dan un R= -0.064 y p=0.84, por lo se puede concluir que no hay diferencias significativas en la composición de especies entre las zonas de altud. Este valor negativo de R puede sugerir que las diferencias intra-zona son mayores que entre zonas.
+
+```{r}
+biol.anosim <- anosim(biol.dist, datosper$Zona, permutations=1000)
+summary(biol.anosim)
+```
+
+La @fig-fig35 nos muestra que no hay diferencias entre los grupos, debido a que tienen una distribución similar a la caja between y las cinturas estan levemente distanciadas, lo que nos indica que no hay diferencias entre ellas.
+
+```{r}
+#| label: fig-fig35
+#| fig-cap: figura de cajas y bigotes de usando ANOSIM por zonas altidudinales
+
+#Grafica de cajas con los valores del ANOSIM por zona altitudinal
+ plot(biol.anosim,las=1, col= "#fc8d59", ylab= "Rangos de distancia",
+     xlab="Zona")
+```
+
+------------------------------------------------------------------------
+
+### **Permanova 2. Permutación multirespuesta - MRPP**
+
+Se obtuvo un p= 0.059, por lo que no se pueden observar diferencias entre los grupos altitudinales, sin embargo, el delta observado (410.2) es menor al delta esperado (420), lo que nos indica diferencias entre los grupos.
+
+```{r}
+biol.mrpp <- mrpp(biol.dist, datosper$Zona, permutations=1000)
+biol.mrpp
+```
+
+------------------------------------------------------------------------
+
+### **Permanova 3. Permanova de un factor (una vía)**
+
+Al realizar el permanova se puede observar que hay una diferencia significativa (p= 0.00099, F=4.1344), por lo que si se observa diferencias en las abundancias de los peces entre las zonas de altitud. Por esto, se rechaza la hipotesis nula (Ho) y se acepta la hipotesis alterna (Ha) que nos dice que si hay diferencias.
+
+```{r}
+library(vegan)
+
+# 1. Selección y limpieza de datos
+datos_numericos <- datosper[, 3:91]
+datos_numericos[datos_numericos <= 0] <- 0.001
+
+
+datos_log <- log10(datos_numericos + 1)  
+biol.dist1 <- vegdist(datos_log, "euclidean")
+zonas_filtradas <- as.factor(datosper$Zona[1:nrow(datos_log)])
+biol.permanova <- adonis2(biol.dist1 ~ zonas_filtradas, permutations = 1000)
+biol.permanova
+```
+
+Se puede observar que la gran mayoria de especies fueron significantes (p \< 0.05) en la diferenciación de las zonas de altitud, donde solo especies como *Centropomus undecimalis* y *Pylodictis olivaris* no aportaron a la diferenciació de los grupos.
+
+```{r, warning=FALSE, message=FALSE}
+attach(datosper)
+biol.permanova1 <- adonis(biol.dist1 ~ Hypanus_sabinus+Atractosteus_spatula+Elops_saurus+Megalops_atlanticus+Albula_vulpes+Anguila_rostrata+Myrophis_punctatus+Anchoa_mitchilli+Anchoa_hepsetus+Brevoortia_gunteri+Brevoortia_patronus+Dorosoma_cepedianum+Dorosoma_petenense+Harengula_jaguana+Opisthonema_oglinum+Campostoma_anomalum+Cyprinella_lutrensis+Cyprinus_carpio+Dionda_episcopa+Dionda_sp.+Notropis_aguirrepequeñoi+Moxostoma_congestum+Astyanax_mexicanus+Ariopsis_felis+Ameiurus_melas+Ameiurus_natalis+Ictalurus_lupus+Ictalurus_punctatus+Ictalurus_sp.+Pylodictis_olivaris+Synodus_foetens+Porichthys_plectrodon+Dajaus_monticola+Mugil_curema_+Membras_martinica+Menidia_beryllina+Hemiramphus_brasiliensis+Strongylura_timucu+Fundulus_grandis+Lucania_parva+Gambusia_affinis+Gambusia_aurata+Gambusia_regani_+Gambusia_sp.+Poecilia_formosa+Poecilia_latipinna+Poecilia_mexicana+Poecilia_sp.+Xiphophorus_variatus_+Prionotus_rubio+Centropomus_undecimalis_+Mycteroperca_bonaci+Serranus_atrobranchus_+Lepomis_macrochirus+Micropterus_spp.+Caranx_crysos+Caranx_hippos+Caranx_latus+Oligoplites_saurus+Trachinotus_carolinus_+Trachinotus_falcatus+Lutjanus_campechanus+Lutjanus_cyanopterus+Lutjanus_griseus+Diapterus_auratus+Diapterus_rhombeus+Eucinostomus_melanopterus+Gerres_cinereus+Anisostromus_surinamensis+Archosargus_probatocephalus+Lagodon_rhomboides+Aplodinotus_grunniens+Bairdiella_chrysoura+Bairdiella_ronchus+Cynoscion_arenarius+Cynoscion_nebulosus+Leiostomus_xanthurus+Micropogonias_undulatus+Pogonias_cromis+Herichthys_labridens+Herichthys_cyanoguttatus+Oreochromis_aureus+Dormitator_maculatus+Gobiomorus_dormitor+Gobionellus_oceanicus+Scomberomorus_regalis+Etropus_crossotus+Achirus_lineatus+Symphurus_civitatium, 
+                         perm=1000)
+biol.permanova1$"aov.tab"
+```
+
+------------------------------------------------------------------------
+
+## Referencias bibliográficas
+
+1.  De Catalunya, U. O., Ventura, C., & Fernando, C. B. (2018). *Empleo de modelos estadísticos multivariantes para el análisis de comportamiento de comunidades ecológicas*. <http://hdl.handle.net/10609/72629>
+
+2.  González, A.R. (2017). Ecología aplicada: diseño y análisis estadístico.
+
+3.  Ospina, J.S., López-Delgado, E.O., & Villa-Navarro, F.A. (2023). Estructura y diversidad de las comunidades ícticas a lo largo de un gradiente longitudinal en ríos costeros de la Sierra Nevada de Santa Marta. *Revista de la Academia Colombiana de Ciencias Exactas, Físicas y Naturales*.
+
+4.  Torrruco, D., González, A., & González, Á. T. (2017). Diversidad y distribución de peces y su relación con variables ambientales, en el sur del Golfo de México. *Revista de Biología Tropical*, *66*(1), 438. https://doi.org/10.15517/rbt.v66i1.26255
